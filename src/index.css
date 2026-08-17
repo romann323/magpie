@@ -1,0 +1,74 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html, body, #root {
+    height: 100%;
+    margin: 0;
+  }
+  body {
+    @apply bg-surface text-slate-200 font-sans antialiased;
+    color-scheme: dark;
+    overscroll-behavior: none;
+  }
+  ::selection {
+    background: rgba(99, 102, 241, 0.35);
+  }
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #2a2f3b;
+    border-radius: 6px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #3a4050;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center gap-2 px-3 py-1.5 rounded-md
+           bg-surface-raised hover:bg-surface-hover border border-surface-border
+           text-sm text-slate-200 transition-colors;
+  }
+  .btn-primary {
+    @apply inline-flex items-center gap-2 px-3 py-1.5 rounded-md
+           bg-accent hover:bg-accent-hover border border-accent
+           text-sm text-white transition-colors;
+  }
+  .btn-icon {
+    @apply inline-flex items-center justify-center w-8 h-8 rounded-md
+           bg-transparent hover:bg-surface-hover border border-transparent
+           text-slate-400 hover:text-slate-100 transition-colors;
+  }
+  .input {
+    @apply w-full px-3 py-1.5 rounded-md
+           bg-surface-raised border border-surface-border
+           text-sm text-slate-200 placeholder-slate-500
+           focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent
+           transition-colors;
+  }
+  .textarea {
+    @apply w-full px-3 py-2 rounded-md
+           bg-surface-raised border border-surface-border
+           text-sm text-slate-200 placeholder-slate-500
+           focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent
+           transition-colors resize-y;
+  }
+  .card {
+    @apply bg-surface-raised border border-surface-border rounded-lg;
+  }
+  .sidebar-item {
+    @apply flex items-center justify-between gap-2 w-full px-2 py-1.5 rounded-md
+           text-sm text-slate-300 hover:bg-surface-hover cursor-pointer transition-colors;
+  }
+  .sidebar-item.active {
+    @apply bg-accent/15 text-accent border border-accent/30;
+  }
+}
