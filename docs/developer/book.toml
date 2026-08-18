@@ -1,0 +1,43 @@
+[book]
+title = "PicOrg Developer Guide"
+authors = ["PicOrg Contributors"]
+language = "en"
+multilingual = false
+src = "src"
+description = "Functional overview, architecture, and detailed design of PicOrg."
+
+[output.html]
+default-theme = "light"
+preferred-dark-theme = "navy"
+git-repository-url = ""
+edit-url-template = ""
+site-url = "/developer/"
+copy-fonts = true
+smart-punctuation = true
+mathjax-support = false
+additional-css = ["theme.css"]
+additional-js = ["pdf-link.js"]
+
+[output.html.playground]
+runnable = false
+
+[output.html.fold]
+enable = true
+level = 1
+
+[output.html.print]
+enable = true
+page-break = true
+
+[output.html.search]
+enable = true
+limit-results = 30
+teaser-word-count = 30
+use-boolean-and = true
+boost-title = 2
+boost-hierarchy = 1
+boost-paragraph = 1
+expand = true
+heading-split-level = 3
+
+[preprocessor.index]

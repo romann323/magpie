@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PicOrg — Documentation</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #0f172a;
+        --bg-card: #1e293b;
+        --bg-card-hover: #253449;
+        --border: #334155;
+        --text: #e2e8f0;
+        --text-dim: #94a3b8;
+        --text-strong: #f8fafc;
+        --accent: #6366f1;
+        --accent-2: #a855f7;
+        --accent-user: #10b981;
+        --accent-dev: #f59e0b;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; height: 100%; }
+      body {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        background:
+          radial-gradient(ellipse at top left, rgba(99, 102, 241, 0.15) 0%, transparent 50%),
+          radial-gradient(ellipse at bottom right, rgba(168, 85, 247, 0.12) 0%, transparent 55%),
+          var(--bg);
+        color: var(--text);
+        min-height: 100%;
+        -webkit-font-smoothing: antialiased;
+      }
+      code, pre { font-family: 'JetBrains Mono', monospace; }
+      a { color: inherit; }
+      main {
+        max-width: 1120px;
+        margin: 0 auto;
+        padding: 80px 32px 64px;
+      }
+      header {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        margin-bottom: 48px;
+      }
+      .logo {
+        width: 48px;
+        height: 48px;
+        border-radius: 12px;
+        background: linear-gradient(135deg, var(--accent), var(--accent-2));
+        display: grid;
+        place-items: center;
+        color: white;
+        font-weight: 700;
+        font-size: 22px;
+        box-shadow: 0 10px 30px rgba(99, 102, 241, 0.35);
+      }
+      .brand { font-size: 22px; font-weight: 700; letter-spacing: -0.01em; color: var(--text-strong); }
+      .brand-sub { color: var(--text-dim); font-size: 14px; font-weight: 500; margin-top: 2px; }
+
+      .hero {
+        margin: 24px 0 48px;
+      }
+      .hero h1 {
+        font-size: 44px;
+        line-height: 1.1;
+        margin: 0 0 16px;
+        letter-spacing: -0.02em;
+        color: var(--text-strong);
+        max-width: 780px;
+      }
+      .hero p {
+        font-size: 17px;
+        line-height: 1.55;
+        color: var(--text-dim);
+        max-width: 700px;
+        margin: 0;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+        gap: 24px;
+        margin-top: 48px;
+      }
+
+      .card {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 32px;
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+        transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+        position: relative;
+        overflow: hidden;
+      }
+      .card::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        opacity: 0;
+        background: linear-gradient(135deg, rgba(255,255,255,0.03), transparent);
+        transition: opacity 0.15s ease;
+        pointer-events: none;
+      }
+      .card:hover {
+        transform: translateY(-4px);
+        border-color: var(--accent);
+        background: var(--bg-card-hover);
+      }
+      .card:hover::before { opacity: 1; }
+
+      .card-header { display: flex; align-items: center; justify-content: space-between; }
+      .card-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 12px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+      }
+      .card-badge.user   { background: rgba(16, 185, 129, 0.15); color: var(--accent-user); }
+      .card-badge.dev    { background: rgba(245, 158, 11, 0.15); color: var(--accent-dev); }
+      .card-icon {
+        width: 42px;
+        height: 42px;
+        border-radius: 10px;
+        background: rgba(255,255,255,0.05);
+        display: grid;
+        place-items: center;
+        color: var(--text-strong);
+      }
+      .card-icon svg { width: 22px; height: 22px; }
+
+      .card h2 {
+        margin: 0;
+        font-size: 24px;
+        letter-spacing: -0.01em;
+        color: var(--text-strong);
+      }
+      .card p {
+        margin: 0;
+        color: var(--text-dim);
+        line-height: 1.55;
+        font-size: 15px;
+      }
+
+      .card-toc {
+        margin: 4px 0 0;
+        padding: 0;
+        list-style: none;
+        display: grid;
+        gap: 6px;
+      }
+      .card-toc li {
+        color: var(--text);
+        font-size: 14px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .card-toc li::before {
+        content: "";
+        width: 4px;
+        height: 4px;
+        border-radius: 50%;
+        background: var(--text-dim);
+        flex-shrink: 0;
+      }
+
+      .card-actions {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-top: 4px;
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 16px;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 500;
+        text-decoration: none;
+        cursor: pointer;
+        transition: transform 0.1s ease, opacity 0.15s ease;
+      }
+      .btn:hover { transform: translateY(-1px); }
+      .btn-primary {
+        background: var(--accent);
+        color: white;
+      }
+      .btn-primary:hover { opacity: 0.92; }
+      .btn-secondary {
+        background: transparent;
+        color: var(--text);
+        border: 1px solid var(--border);
+      }
+      .btn-secondary:hover { border-color: var(--accent); color: var(--text-strong); }
+      .btn svg { width: 16px; height: 16px; }
+
+      .meta {
+        margin-top: 64px;
+        padding-top: 24px;
+        border-top: 1px solid var(--border);
+        color: var(--text-dim);
+        font-size: 13px;
+        display: flex;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 12px;
+      }
+      .meta a { color: var(--text); text-decoration: underline; text-decoration-color: var(--border); }
+      .meta a:hover { text-decoration-color: var(--accent); }
+
+      @media (max-width: 640px) {
+        main { padding: 48px 20px 32px; }
+        .hero h1 { font-size: 32px; }
+        .card { padding: 24px; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div class="logo">P</div>
+        <div>
+          <div class="brand">PicOrg</div>
+          <div class="brand-sub">Documentation</div>
+        </div>
+      </header>
+
+      <section class="hero">
+        <h1>Everything you need to organise your photos — and to hack on the app.</h1>
+        <p>
+          Two documentation sets, one place. Read them in your browser, or
+          download the PDF of either book with a single click.
+        </p>
+      </section>
+
+      <section class="grid">
+        <article class="card">
+          <div class="card-header">
+            <div class="card-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="4" width="18" height="16" rx="2"/>
+                <path d="M3 8h18"/>
+                <path d="M8 4v16"/>
+              </svg>
+            </div>
+            <span class="card-badge user">User</span>
+          </div>
+          <h2>User Manual</h2>
+          <p>
+            Task-oriented guide covering everything from adding your first
+            folder to bulk-tagging thousands of photos. Written for people who
+            want to <em>use</em> PicOrg without opening a source file.
+          </p>
+          <ul class="card-toc">
+            <li>Installing and launching PicOrg</li>
+            <li>Adding library folders, browsing, and searching</li>
+            <li>Editing metadata: titles, ratings, tags, comments</li>
+            <li>Working on many photos at once</li>
+            <li>Where your data lives &amp; interop with other tools</li>
+            <li>Keyboard shortcuts and troubleshooting</li>
+          </ul>
+          <div class="card-actions">
+            <a class="btn btn-primary" href="./user-manual/book/index.html">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M13 5l7 7-7 7"/></svg>
+              Read online
+            </a>
+            <a class="btn btn-secondary" href="./picorg-user-manual.pdf" download="PicOrg-User-Manual.pdf">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Download PDF
+            </a>
+          </div>
+        </article>
+
+        <article class="card">
+          <div class="card-header">
+            <div class="card-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="16 18 22 12 16 6"/>
+                <polyline points="8 6 2 12 8 18"/>
+                <line x1="14" y1="4" x2="10" y2="20"/>
+              </svg>
+            </div>
+            <span class="card-badge dev">Developer</span>
+          </div>
+          <h2>Developer Guide</h2>
+          <p>
+            Three modules — <strong>Functional Overview</strong>,
+            <strong>Architecture</strong>, and <strong>Detailed Design</strong>
+            — for developers building, contributing to, or embedding PicOrg
+            in their own workflow.
+          </p>
+          <ul class="card-toc">
+            <li><strong>Module 1:</strong> Vision, personas, flows, NFRs, scope</li>
+            <li><strong>Module 2:</strong> Stack, IPC, storage, metadata pipeline</li>
+            <li><strong>Module 3:</strong> Repo layout, schema, commands, algorithms</li>
+            <li>Testing strategy &amp; release process</li>
+          </ul>
+          <div class="card-actions">
+            <a class="btn btn-primary" href="./developer/book/index.html">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M13 5l7 7-7 7"/></svg>
+              Read online
+            </a>
+            <a class="btn btn-secondary" href="./picorg-developer-guide.pdf" download="PicOrg-Developer-Guide.pdf">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Download PDF
+            </a>
+          </div>
+        </article>
+      </section>
+
+      <div class="meta">
+        <div>
+          Docs built with
+          <a href="https://rust-lang.github.io/mdBook/">mdBook</a>.
+          PDFs generated from the HTML with headless Edge.
+        </div>
+        <div>PicOrg v0.1.0 · MIT License</div>
+      </div>
+    </main>
+  </body>
+</html>

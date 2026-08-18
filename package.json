@@ -10,7 +10,9 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build"
+    "tauri:build": "tauri build",
+    "docs:build": "powershell -ExecutionPolicy Bypass -File docs/build.ps1",
+    "docs:serve": "powershell -ExecutionPolicy Bypass -File docs/build.ps1 -Serve"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",

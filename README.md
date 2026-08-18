@@ -43,6 +43,30 @@ Build outputs:
 - `src-tauri/target/release/picorg.exe` — the standalone executable (~13 MB).
 - `src-tauri/target/release/bundle/nsis/PicOrg_<version>_x64-setup.exe` — the installer (~3.4 MB).
 
+## Documentation
+
+Full documentation is generated from Markdown into two browsable
+[mdBook](https://rust-lang.github.io/mdBook/) sites, each with a downloadable
+PDF. Open [`docs/index.html`](docs/index.html) to browse:
+
+- **User Manual** — task-oriented guide (installation, editing metadata,
+  multi-select, deletion, keyboard shortcuts, troubleshooting).
+- **Developer Guide** — three modules: Functional Overview, Architecture,
+  Detailed Design (repo layout, DB schema, Tauri commands, algorithms,
+  testing strategy, build & release).
+
+Regenerate after editing anything under `docs/user-manual/src/` or
+`docs/developer/src/`:
+
+```powershell
+npm run docs:build          # rebuilds HTML + PDFs
+npm run docs:serve          # rebuilds and serves on http://localhost:8000
+```
+
+The build step requires `mdbook` (installed once via
+`cargo install mdbook --version 0.4.40 --locked`) and Microsoft Edge or
+Chrome for the PDF rendering.
+
 ## Architecture
 
 ```

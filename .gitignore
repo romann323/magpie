@@ -35,3 +35,15 @@ Desktop.ini
 
 # TypeScript
 *.tsbuildinfo
+
+# Documentation build outputs
+docs/user-manual/book/
+docs/developer/book/
+# Copies made by docs/build.ps1 from docs/shared/
+docs/user-manual/theme.css
+docs/user-manual/pdf-link.js
+docs/developer/theme.css
+docs/developer/pdf-link.js
+# Generated PDFs (uncomment to gitignore, or commit them for GitHub releases)
+# docs/picorg-user-manual.pdf
+# docs/picorg-developer-guide.pdf
