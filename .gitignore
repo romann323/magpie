@@ -45,5 +45,5 @@ docs/user-manual/pdf-link.js
 docs/developer/theme.css
 docs/developer/pdf-link.js
 # Generated PDFs (uncomment to gitignore, or commit them for GitHub releases)
-# docs/picorg-user-manual.pdf
-# docs/picorg-developer-guide.pdf
+# docs/magpie-user-manual.pdf
+# docs/magpie-developer-guide.pdf

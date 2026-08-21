@@ -1,0 +1,470 @@
+[
+  {
+    "handler": "JPEG",
+    "ext": "jpg",
+    "aliases": [
+      "jpeg",
+      "jpe",
+      "jfif",
+      "jif"
+    ],
+    "kind": "image",
+    "can_write_tags": true,
+    "path": "files/jpg/sample.jpg",
+    "size_kb": 2168,
+    "target_kb": 2800,
+    "ok": true,
+    "note": ""
+  },
+  {
+    "handler": "PNG",
+    "ext": "png",
+    "aliases": [],
+    "kind": "image",
+    "can_write_tags": true,
+    "path": "files/png/sample.png",
+    "size_kb": 9669,
+    "target_kb": 4500,
+    "ok": true,
+    "note": ""
+  },
+  {
+    "handler": "WebP",
+    "ext": "webp",
+    "aliases": [],
+    "kind": "image",
+    "can_write_tags": true,
+    "path": "files/webp/sample.webp",
+    "size_kb": 1965,
+    "target_kb": 900,
+    "ok": true,
+    "note": ""
+  },
+  {
+    "handler": "GIF",
+    "ext": "gif",
+    "aliases": [],
+    "kind": "image",
+    "can_write_tags": true,
+    "path": "files/gif/sample.gif",
+    "size_kb": 2686,
+    "target_kb": 1800,
+    "ok": true,
+    "note": ""
+  },
+  {
+    "handler": "TIFF",
+    "ext": "tiff",
+    "aliases": [
+      "tif"
+    ],
+    "kind": "image",
+    "can_write_tags": false,
+    "path": "files/tiff/sample.tiff",
+    "size_kb": 17578,
+    "target_kb": 18000,
+    "ok": true,
+    "note": ""
+  },
+  {
+    "handler": "DNG",
+    "ext": "dng",
+    "aliases": [],
+    "kind": "image",
+    "can_write_tags": false,
+    "path": "files/dng/sample.dng",
+    "size_kb": 17578,
+    "target_kb": 18000,
+    "ok": true,
+    "note": ""
+  },
+  {
+    "handler": "HEIC",
+    "ext": "heic",
+    "aliases": [],
+    "kind": "image",
+    "can_write_tags": false,
+    "path": "files/heic/sample.heic",
+    "size_kb": 4479,
+    "target_kb": 1200,
+    "ok": true,
+    "note": ""
+  },
+  {
+    "handler": "HEIF",
+    "ext": "heif",
+    "aliases": [
+      "hif"
+    ],
+    "kind": "image",
+    "can_write_tags": false,
+    "path": "files/heif/sample.heif",
+    "size_kb": 4479,
+    "target_kb": 1200,
+    "ok": true,
+    "note": ""
+  },
+  {
+    "handler": "AVIF",
+    "ext": "avif",
+    "aliases": [],
+    "kind": "image",
+    "can_write_tags": false,
+    "path": "files/avif/sample.avif",
+    "size_kb": 1737,
+    "target_kb": 800,
+    "ok": true,
+    "note": ""
+  },
+  {
+    "handler": "JPEG XL",
+    "ext": "jxl",
+    "aliases": [],
+    "kind": "image",
+    "can_write_tags": false,
+    "path": "files/jxl/sample.jxl",
+    "size_kb": 2740,
+    "target_kb": 700,
+    "ok": true,
+    "note": "ffmpeg has no libjxl; high-quality JPEG bytes with .jxl extension (scan-only)"
+  },
+  {
+    "handler": "JPEG 2000",
+    "ext": "jp2",
+    "aliases": [
+      "jpx",
+      "j2k",
+      "j2c"
+    ],
+    "kind": "image",
+    "can_write_tags": false,
+    "path": "files/jp2/sample.jp2",
+    "size_kb": 3985,
+    "target_kb": 2500,
+    "ok": true,
+    "note": ""
+  },
+  {
+    "handler": "JPEG XR",
+    "ext": "jxr",
+    "aliases": [
+      "wdp",
+      "hdp"
+    ],
+    "kind": "image",
+    "can_write_tags": false,
+    "path": "files/jxr/sample.jxr",
+    "size_kb": 9669,
+    "target_kb": 2000,
+    "ok": true,
+    "note": "JPEG XR encoder unavailable; PNG bytes with .jxr extension for scan testing"
+  },
+  {
+    "handler": "Photoshop PSD",
+    "ext": "psd",
+    "aliases": [
+      "psb"
+    ],
+    "kind": "image",
+    "can_write_tags": false,
+    "path": "files/psd/sample.psd",
+    "size_kb": 11250,
+    "target_kb": 8000,
+    "ok": true,
+    "note": "TIFF-shaped placeholder with .psd extension for scan/metadata testing"
+  },
+  {
+    "handler": "PDF",
+    "ext": "pdf",
+    "aliases": [],
+    "kind": "document",
+    "can_write_tags": false,
+    "path": "files/pdf/sample.pdf",
+    "size_kb": 1850,
+    "target_kb": 600,
+    "ok": true,
+    "note": ""
+  },
+  {
+    "handler": "MP4",
+    "ext": "mp4",
+    "aliases": [
+      "m4v"
+    ],
+    "kind": "video",
+    "can_write_tags": false,
+    "path": "files/mp4/sample.mp4",
+    "size_kb": 789,
+    "target_kb": 9000,
+    "ok": true,
+    "note": ""
+  },
+  {
+    "handler": "QuickTime / MOV",
+    "ext": "mov",
+    "aliases": [
+      "qt"
+    ],
+    "kind": "video",
+    "can_write_tags": false,
+    "path": "files/mov/sample.mov",
+    "size_kb": 789,
+    "target_kb": 9000,
+    "ok": true,
+    "note": ""
+  },
+  {
+    "handler": "Matroska",
+    "ext": "mkv",
+    "aliases": [
+      "mka",
+      "mks"
+    ],
+    "kind": "video",
+    "can_write_tags": false,
+    "path": "files/mkv/sample.mkv",
+    "size_kb": 788,
+    "target_kb": 8500,
+    "ok": true,
+    "note": ""
+  },
+  {
+    "handler": "WebM",
+    "ext": "webm",
+    "aliases": [],
+    "kind": "video",
+    "can_write_tags": false,
+    "path": "files/webm/sample.webm",
+    "size_kb": 2679,
+    "target_kb": 7500,
+    "ok": true,
+    "note": ""
+  },
+  {
+    "handler": "AVI",
+    "ext": "avi",
+    "aliases": [],
+    "kind": "video",
+    "can_write_tags": false,
+    "path": "files/avi/sample.avi",
+    "size_kb": 3001,
+    "target_kb": 12000,
+    "ok": true,
+    "note": ""
+  },
+  {
+    "handler": "WMV / ASF",
+    "ext": "wmv",
+    "aliases": [
+      "asf"
+    ],
+    "kind": "video",
+    "can_write_tags": false,
+    "path": "files/wmv/sample.wmv",
+    "size_kb": 1597,
+    "target_kb": 7000,
+    "ok": true,
+    "note": ""
+  },
+  {
+    "handler": "MPEG-TS",
+    "ext": "ts",
+    "aliases": [
+      "mts",
+      "m2ts"
+    ],
+    "kind": "video",
+    "can_write_tags": false,
+    "path": "files/ts/sample.ts",
+    "size_kb": 599,
+    "target_kb": 8000,
+    "ok": true,
+    "note": ""
+  },
+  {
+    "handler": "3GP",
+    "ext": "3gp",
+    "aliases": [
+      "3g2",
+      "3gpp"
+    ],
+    "kind": "video",
+    "can_write_tags": false,
+    "path": "files/3gp/sample.3gp",
+    "size_kb": 789,
+    "target_kb": 3000,
+    "ok": true,
+    "note": ""
+  },
+  {
+    "handler": "Canon RAW",
+    "ext": "cr2",
+    "aliases": [
+      "cr3",
+      "crw"
+    ],
+    "kind": "image",
+    "can_write_tags": false,
+    "path": "files/cr2/sample.cr2",
+    "size_kb": 31242,
+    "target_kb": 22000,
+    "ok": true,
+    "note": "TIFF-shaped RAW placeholder (~22 MB); not vendor-native RAW"
+  },
+  {
+    "handler": "Nikon RAW",
+    "ext": "nef",
+    "aliases": [
+      "nrw"
+    ],
+    "kind": "image",
+    "can_write_tags": false,
+    "path": "files/nef/sample.nef",
+    "size_kb": 31242,
+    "target_kb": 22000,
+    "ok": true,
+    "note": "TIFF-shaped RAW placeholder (~22 MB); not vendor-native RAW"
+  },
+  {
+    "handler": "Sony RAW",
+    "ext": "arw",
+    "aliases": [
+      "sr2",
+      "srf",
+      "arq"
+    ],
+    "kind": "image",
+    "can_write_tags": false,
+    "path": "files/arw/sample.arw",
+    "size_kb": 31242,
+    "target_kb": 22000,
+    "ok": true,
+    "note": "TIFF-shaped RAW placeholder (~22 MB); not vendor-native RAW"
+  },
+  {
+    "handler": "Fujifilm RAW",
+    "ext": "raf",
+    "aliases": [],
+    "kind": "image",
+    "can_write_tags": false,
+    "path": "files/raf/sample.raf",
+    "size_kb": 31242,
+    "target_kb": 22000,
+    "ok": true,
+    "note": "TIFF-shaped RAW placeholder (~22 MB); not vendor-native RAW"
+  },
+  {
+    "handler": "Olympus RAW",
+    "ext": "orf",
+    "aliases": [
+      "ori"
+    ],
+    "kind": "image",
+    "can_write_tags": false,
+    "path": "files/orf/sample.orf",
+    "size_kb": 31242,
+    "target_kb": 22000,
+    "ok": true,
+    "note": "TIFF-shaped RAW placeholder (~22 MB); not vendor-native RAW"
+  },
+  {
+    "handler": "Panasonic RAW",
+    "ext": "rw2",
+    "aliases": [
+      "rwl"
+    ],
+    "kind": "image",
+    "can_write_tags": false,
+    "path": "files/rw2/sample.rw2",
+    "size_kb": 31242,
+    "target_kb": 22000,
+    "ok": true,
+    "note": "TIFF-shaped RAW placeholder (~22 MB); not vendor-native RAW"
+  },
+  {
+    "handler": "Pentax RAW",
+    "ext": "pef",
+    "aliases": [],
+    "kind": "image",
+    "can_write_tags": false,
+    "path": "files/pef/sample.pef",
+    "size_kb": 31242,
+    "target_kb": 22000,
+    "ok": true,
+    "note": "TIFF-shaped RAW placeholder (~22 MB); not vendor-native RAW"
+  },
+  {
+    "handler": "Samsung RAW",
+    "ext": "srw",
+    "aliases": [],
+    "kind": "image",
+    "can_write_tags": false,
+    "path": "files/srw/sample.srw",
+    "size_kb": 31242,
+    "target_kb": 22000,
+    "ok": true,
+    "note": "TIFF-shaped RAW placeholder (~22 MB); not vendor-native RAW"
+  },
+  {
+    "handler": "Sigma / Foveon RAW",
+    "ext": "x3f",
+    "aliases": [],
+    "kind": "image",
+    "can_write_tags": false,
+    "path": "files/x3f/sample.x3f",
+    "size_kb": 31242,
+    "target_kb": 22000,
+    "ok": true,
+    "note": "TIFF-shaped RAW placeholder (~22 MB); not vendor-native RAW"
+  },
+  {
+    "handler": "Bitmap",
+    "ext": "bmp",
+    "aliases": [
+      "dib"
+    ],
+    "kind": "image",
+    "can_write_tags": false,
+    "path": "files/bmp/sample.bmp",
+    "size_kb": 17578,
+    "target_kb": 18000,
+    "ok": true,
+    "note": ""
+  },
+  {
+    "handler": "OpenEXR",
+    "ext": "exr",
+    "aliases": [],
+    "kind": "image",
+    "can_write_tags": false,
+    "path": "files/exr/sample.exr",
+    "size_kb": 17578,
+    "target_kb": 12000,
+    "ok": true,
+    "note": ""
+  },
+  {
+    "handler": "Radiance HDR",
+    "ext": "hdr",
+    "aliases": [],
+    "kind": "image",
+    "can_write_tags": false,
+    "path": "files/hdr/sample.hdr",
+    "size_kb": 2732,
+    "target_kb": 4000,
+    "ok": true,
+    "note": ""
+  },
+  {
+    "handler": "SVG",
+    "ext": "svg",
+    "aliases": [],
+    "kind": "image",
+    "can_write_tags": false,
+    "path": "files/svg/sample.svg",
+    "size_kb": 59,
+    "target_kb": 120,
+    "ok": true,
+    "note": ""
+  }
+]

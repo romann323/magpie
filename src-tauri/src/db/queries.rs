@@ -1,5 +1,5 @@
 use crate::db::Db;
-use crate::error::{PicOrgError, PicOrgResult};
+use crate::error::{AppError, AppResult};
 use crate::types::*;
 use rusqlite::{params, params_from_iter, types::Value, Connection, OptionalExtension};
 use std::collections::HashSet;
@@ -10,7 +10,7 @@ fn now_ms() -> i64 {
 
 // -------- Library Folders --------
 
-pub fn add_folder(db: &Db, path: &str) -> PicOrgResult<LibraryFolder> {
+pub fn add_folder(db: &Db, path: &str) -> AppResult<LibraryFolder> {
     db.with_conn(|conn| {
         conn.execute(
             "INSERT OR IGNORE INTO library_folders (path, added_at) VALUES (?1, ?2)",
@@ -20,17 +20,17 @@ pub fn add_folder(db: &Db, path: &str) -> PicOrgResult<LibraryFolder> {
     })
 }
 
-pub fn remove_folder(db: &Db, id: i64) -> PicOrgResult<()> {
+pub fn remove_folder(db: &Db, id: i64) -> AppResult<()> {
     db.with_conn(|conn| {
         let n = conn.execute("DELETE FROM library_folders WHERE id = ?1", params![id])?;
         if n == 0 {
-            return Err(PicOrgError::FolderNotFound(id));
+            return Err(AppError::FolderNotFound(id));
         }
         Ok(())
     })
 }
 
-pub fn list_folders(db: &Db) -> PicOrgResult<Vec<LibraryFolder>> {
+pub fn list_folders(db: &Db) -> AppResult<Vec<LibraryFolder>> {
     db.with_conn(|conn| {
         let mut stmt = conn.prepare(
             "SELECT f.id, f.path, f.added_at, f.last_scan_at,
@@ -51,7 +51,7 @@ pub fn list_folders(db: &Db) -> PicOrgResult<Vec<LibraryFolder>> {
     })
 }
 
-pub fn set_last_scan_at(db: &Db, folder_id: i64, ts: i64) -> PicOrgResult<()> {
+pub fn set_last_scan_at(db: &Db, folder_id: i64, ts: i64) -> AppResult<()> {
     db.with_conn(|conn| {
         conn.execute(
             "UPDATE library_folders SET last_scan_at = ?1 WHERE id = ?2",
@@ -61,7 +61,7 @@ pub fn set_last_scan_at(db: &Db, folder_id: i64, ts: i64) -> PicOrgResult<()> {
     })
 }
 
-fn get_folder_by_path(conn: &Connection, path: &str) -> PicOrgResult<LibraryFolder> {
+fn get_folder_by_path(conn: &Connection, path: &str) -> AppResult<LibraryFolder> {
     let mut stmt = conn.prepare(
         "SELECT f.id, f.path, f.added_at, f.last_scan_at,
                 (SELECT COUNT(*) FROM images i WHERE i.folder_id = f.id AND i.missing = 0)
@@ -91,7 +91,9 @@ pub struct FileStat {
     pub mtime_ms: i64,
 }
 
-/// Metadata read from the image itself.
+/// Subset of on-disk file metadata we persist in the DB for search/sort.
+/// The full technical metadata is regenerated on-demand for the DetailsPanel;
+/// only sortable/filterable fields end up here.
 #[derive(Default)]
 pub struct ImageMetaFromFile {
     pub width: Option<i64>,
@@ -100,12 +102,10 @@ pub struct ImageMetaFromFile {
     pub camera_make: Option<String>,
     pub camera_model: Option<String>,
     pub title: Option<String>,
-    pub rating: Option<i64>,
-    pub comment: Option<String>,
     pub tags: Vec<String>,
 }
 
-pub fn get_image_paths(db: &Db, ids: &[i64]) -> PicOrgResult<Vec<(i64, String)>> {
+pub fn get_image_paths(db: &Db, ids: &[i64]) -> AppResult<Vec<(i64, String)>> {
     if ids.is_empty() {
         return Ok(Vec::new());
     }
@@ -127,7 +127,7 @@ pub fn get_image_paths(db: &Db, ids: &[i64]) -> PicOrgResult<Vec<(i64, String)>>
     })
 }
 
-pub fn delete_image_rows(db: &Db, ids: &[i64]) -> PicOrgResult<usize> {
+pub fn delete_image_rows(db: &Db, ids: &[i64]) -> AppResult<usize> {
     if ids.is_empty() {
         return Ok(0);
     }
@@ -144,7 +144,7 @@ pub fn delete_image_rows(db: &Db, ids: &[i64]) -> PicOrgResult<usize> {
     })
 }
 
-pub fn image_exists_by_path(db: &Db, path: &str) -> PicOrgResult<bool> {
+pub fn image_exists_by_path(db: &Db, path: &str) -> AppResult<bool> {
     db.with_conn(|conn| {
         let exists: Option<i64> = conn
             .query_row(
@@ -157,7 +157,7 @@ pub fn image_exists_by_path(db: &Db, path: &str) -> PicOrgResult<bool> {
     })
 }
 
-pub fn upsert_image_stat(db: &Db, s: &FileStat) -> PicOrgResult<(i64, bool)> {
+pub fn upsert_image_stat(db: &Db, s: &FileStat) -> AppResult<(i64, bool)> {
     db.with_conn(|conn| {
         let existing: Option<(i64, i64, i64)> = conn
             .query_row(
@@ -213,17 +213,17 @@ pub fn upsert_image_stat(db: &Db, s: &FileStat) -> PicOrgResult<(i64, bool)> {
 }
 
 /// Overwrites the user-metadata columns for one image with values read from
-/// the filesystem (embedded XMP + sidecar). Also updates `meta_read_at`.
+/// the filesystem. Also updates `meta_read_at`.
 ///
-/// Unlike [`set_image_meta`], this does NOT `COALESCE` — it takes the FS as
-/// authoritative for these fields. Only user metadata is touched; EXIF-derived
-/// fields (dimensions, taken_at, camera) are left as-is unless the FS provides
-/// them.
+/// Unlike [`set_image_meta`], this takes the FS as authoritative for the
+/// title/tags fields (they will be `NULL`ed if the file no longer carries
+/// them). Technical fields still use `COALESCE` — dimensions/taken_at/camera
+/// don't need to be periodically re-blanked.
 pub fn resync_user_meta_from_fs(
     db: &Db,
     image_id: i64,
     m: &ImageMetaFromFile,
-) -> PicOrgResult<()> {
+) -> AppResult<()> {
     db.with_conn_mut(|conn| {
         let tx = conn.transaction()?;
         tx.execute(
@@ -234,10 +234,8 @@ pub fn resync_user_meta_from_fs(
                 camera_make  = COALESCE(?4, camera_make),
                 camera_model = COALESCE(?5, camera_model),
                 title        = ?6,
-                rating       = ?7,
-                comment      = ?8,
-                meta_read_at = ?9
-             WHERE id = ?10",
+                meta_read_at = ?7
+             WHERE id = ?8",
             params![
                 m.width,
                 m.height,
@@ -245,8 +243,6 @@ pub fn resync_user_meta_from_fs(
                 m.camera_make,
                 m.camera_model,
                 m.title,
-                m.rating,
-                m.comment,
                 now_ms(),
                 image_id,
             ],
@@ -258,7 +254,7 @@ pub fn resync_user_meta_from_fs(
     })
 }
 
-pub fn set_image_meta(db: &Db, image_id: i64, m: &ImageMetaFromFile) -> PicOrgResult<()> {
+pub fn set_image_meta(db: &Db, image_id: i64, m: &ImageMetaFromFile) -> AppResult<()> {
     db.with_conn_mut(|conn| {
         let tx = conn.transaction()?;
         tx.execute(
@@ -269,10 +265,8 @@ pub fn set_image_meta(db: &Db, image_id: i64, m: &ImageMetaFromFile) -> PicOrgRe
                 camera_make = COALESCE(?4, camera_make),
                 camera_model = COALESCE(?5, camera_model),
                 title = ?6,
-                rating = ?7,
-                comment = ?8,
-                meta_read_at = ?9
-             WHERE id = ?10",
+                meta_read_at = ?7
+             WHERE id = ?8",
             params![
                 m.width,
                 m.height,
@@ -280,8 +274,6 @@ pub fn set_image_meta(db: &Db, image_id: i64, m: &ImageMetaFromFile) -> PicOrgRe
                 m.camera_make,
                 m.camera_model,
                 m.title,
-                m.rating,
-                m.comment,
                 now_ms(),
                 image_id,
             ],
@@ -294,7 +286,7 @@ pub fn set_image_meta(db: &Db, image_id: i64, m: &ImageMetaFromFile) -> PicOrgRe
     })
 }
 
-pub fn set_image_content_hash(db: &Db, image_id: i64, hash: &str) -> PicOrgResult<()> {
+pub fn set_image_content_hash(db: &Db, image_id: i64, hash: &str) -> AppResult<()> {
     db.with_conn(|conn| {
         conn.execute(
             "UPDATE images SET content_hash = ?1 WHERE id = ?2",
@@ -304,15 +296,25 @@ pub fn set_image_content_hash(db: &Db, image_id: i64, hash: &str) -> PicOrgResul
     })
 }
 
-pub fn get_image(db: &Db, image_id: i64) -> PicOrgResult<ImageDetails> {
+/// DB-only slice of ImageDetails: no technical metadata, no format-handler
+/// info. commands/images.rs enriches this into a full ImageDetails using the
+/// FormatRegistry.
+pub struct ImageDetailsRow {
+    pub summary: ImageSummary,
+    pub tags: Vec<String>,
+    pub meta_written_at: Option<i64>,
+    pub meta_read_at: Option<i64>,
+}
+
+pub fn get_image_row(db: &Db, image_id: i64) -> AppResult<ImageDetailsRow> {
     db.with_conn(|conn| {
         let mut stmt = conn.prepare(
             "SELECT id, folder_id, path, filename, ext, size_bytes, mtime_ms,
-                    width, height, content_hash, taken_at, camera_make, camera_model,
-                    title, rating, comment, meta_written_at, meta_read_at
+                    width, height, content_hash, taken_at,
+                    title, meta_written_at, meta_read_at
              FROM images WHERE id = ?1",
         )?;
-        let (summary, comment, camera_make, camera_model, mw, mr) = stmt
+        let (summary, mw, mr) = stmt
             .query_row(params![image_id], |row| {
                 Ok((
                     ImageSummary {
@@ -327,34 +329,27 @@ pub fn get_image(db: &Db, image_id: i64) -> PicOrgResult<ImageDetails> {
                         height: row.get(8)?,
                         content_hash: row.get(9)?,
                         taken_at: row.get(10)?,
-                        title: row.get(13)?,
-                        rating: row.get(14)?,
+                        title: row.get(11)?,
                     },
-                    row.get::<_, Option<String>>(15)?,
-                    row.get::<_, Option<String>>(11)?,
-                    row.get::<_, Option<String>>(12)?,
-                    row.get::<_, Option<i64>>(16)?,
-                    row.get::<_, Option<i64>>(17)?,
+                    row.get::<_, Option<i64>>(12)?,
+                    row.get::<_, Option<i64>>(13)?,
                 ))
             })
             .optional()?
-            .ok_or(PicOrgError::ImageNotFound(image_id))?;
+            .ok_or(AppError::ImageNotFound(image_id))?;
 
         let tags = get_tags_for_image(conn, image_id)?;
 
-        Ok(ImageDetails {
+        Ok(ImageDetailsRow {
             summary,
-            comment,
             tags,
-            camera_make,
-            camera_model,
             meta_written_at: mw,
             meta_read_at: mr,
         })
     })
 }
 
-pub fn get_tags_for_image(conn: &Connection, image_id: i64) -> PicOrgResult<Vec<String>> {
+pub fn get_tags_for_image(conn: &Connection, image_id: i64) -> AppResult<Vec<String>> {
     let mut stmt = conn.prepare(
         "SELECT t.name FROM tags t
          JOIN image_tags it ON it.tag_id = t.id
@@ -364,7 +359,7 @@ pub fn get_tags_for_image(conn: &Connection, image_id: i64) -> PicOrgResult<Vec<
     Ok(rows.collect::<Result<Vec<_>, _>>()?)
 }
 
-pub fn mark_folder_paths_missing(db: &Db, folder_id: i64, seen: &HashSet<String>) -> PicOrgResult<i64> {
+pub fn mark_folder_paths_missing(db: &Db, folder_id: i64, seen: &HashSet<String>) -> AppResult<i64> {
     db.with_conn_mut(|conn| {
         let tx = conn.transaction()?;
         let mut removed = 0i64;
@@ -389,7 +384,7 @@ pub fn mark_folder_paths_missing(db: &Db, folder_id: i64, seen: &HashSet<String>
 
 // -------- Metadata patches (from UI) --------
 
-pub fn apply_metadata_patch(db: &Db, image_id: i64, patch: &MetadataPatch) -> PicOrgResult<()> {
+pub fn apply_metadata_patch(db: &Db, image_id: i64, patch: &MetadataPatch) -> AppResult<()> {
     db.with_conn_mut(|conn| {
         let tx = conn.transaction()?;
 
@@ -397,18 +392,6 @@ pub fn apply_metadata_patch(db: &Db, image_id: i64, patch: &MetadataPatch) -> Pi
             tx.execute(
                 "UPDATE images SET title = ?1 WHERE id = ?2",
                 params![title, image_id],
-            )?;
-        }
-        if let Some(rating) = &patch.rating {
-            tx.execute(
-                "UPDATE images SET rating = ?1 WHERE id = ?2",
-                params![rating, image_id],
-            )?;
-        }
-        if let Some(comment) = &patch.comment {
-            tx.execute(
-                "UPDATE images SET comment = ?1 WHERE id = ?2",
-                params![comment, image_id],
             )?;
         }
         if let Some(tags) = &patch.tags {
@@ -433,7 +416,7 @@ pub fn apply_metadata_patch(db: &Db, image_id: i64, patch: &MetadataPatch) -> Pi
     })
 }
 
-pub fn set_meta_written_at(db: &Db, image_id: i64, ts: i64) -> PicOrgResult<()> {
+pub fn set_meta_written_at(db: &Db, image_id: i64, ts: i64) -> AppResult<()> {
     db.with_conn(|conn| {
         conn.execute(
             "UPDATE images SET meta_written_at = ?1 WHERE id = ?2",
@@ -443,7 +426,7 @@ pub fn set_meta_written_at(db: &Db, image_id: i64, ts: i64) -> PicOrgResult<()> 
     })
 }
 
-pub fn set_meta_read_at_now(db: &Db, image_id: i64) -> PicOrgResult<()> {
+pub fn set_meta_read_at_now(db: &Db, image_id: i64) -> AppResult<()> {
     db.with_conn(|conn| {
         conn.execute(
             "UPDATE images SET meta_read_at = ?1 WHERE id = ?2",
@@ -455,7 +438,7 @@ pub fn set_meta_read_at_now(db: &Db, image_id: i64) -> PicOrgResult<()> {
 
 // -------- Tags --------
 
-fn tag_id_for_name(conn: &Connection, name: &str) -> PicOrgResult<i64> {
+fn tag_id_for_name(conn: &Connection, name: &str) -> AppResult<i64> {
     conn.execute(
         "INSERT OR IGNORE INTO tags (name) VALUES (?1)",
         params![name.trim()],
@@ -467,7 +450,7 @@ fn tag_id_for_name(conn: &Connection, name: &str) -> PicOrgResult<i64> {
     )?)
 }
 
-fn add_tag_to_image_tx(tx: &rusqlite::Transaction, image_id: i64, name: &str) -> PicOrgResult<()> {
+fn add_tag_to_image_tx(tx: &rusqlite::Transaction, image_id: i64, name: &str) -> AppResult<()> {
     let tag_id = tag_id_for_name(tx, name)?;
     tx.execute(
         "INSERT OR IGNORE INTO image_tags (image_id, tag_id) VALUES (?1, ?2)",
@@ -480,7 +463,7 @@ fn remove_tag_from_image_tx(
     tx: &rusqlite::Transaction,
     image_id: i64,
     name: &str,
-) -> PicOrgResult<()> {
+) -> AppResult<()> {
     tx.execute(
         "DELETE FROM image_tags
          WHERE image_id = ?1
@@ -494,7 +477,7 @@ fn replace_image_tags_tx(
     tx: &rusqlite::Transaction,
     image_id: i64,
     tags: &[String],
-) -> PicOrgResult<()> {
+) -> AppResult<()> {
     tx.execute(
         "DELETE FROM image_tags WHERE image_id = ?1",
         params![image_id],
@@ -513,7 +496,7 @@ fn replace_image_tags_tx(
     Ok(())
 }
 
-pub fn list_tags(db: &Db, prefix: Option<&str>) -> PicOrgResult<Vec<TagStats>> {
+pub fn list_tags(db: &Db, prefix: Option<&str>) -> AppResult<Vec<TagStats>> {
     db.with_conn(|conn| {
         let (sql, args): (&str, Vec<Value>) = match prefix {
             Some(p) if !p.trim().is_empty() => (
@@ -545,14 +528,13 @@ pub fn list_tags(db: &Db, prefix: Option<&str>) -> PicOrgResult<Vec<TagStats>> {
     })
 }
 
-pub fn rename_tag(db: &Db, old: &str, new: &str) -> PicOrgResult<()> {
+pub fn rename_tag(db: &Db, old: &str, new: &str) -> AppResult<()> {
     let new = new.trim();
     if new.is_empty() {
-        return Err(PicOrgError::BadInput("new tag name is empty".into()));
+        return Err(AppError::BadInput("new tag name is empty".into()));
     }
     db.with_conn_mut(|conn| {
         let tx = conn.transaction()?;
-        // Try direct rename
         let updated = tx.execute(
             "UPDATE OR IGNORE tags SET name = ?1 WHERE name = ?2 COLLATE NOCASE",
             params![new, old.trim()],
@@ -589,7 +571,7 @@ pub fn rename_tag(db: &Db, old: &str, new: &str) -> PicOrgResult<()> {
     })
 }
 
-pub fn delete_tag(db: &Db, name: &str) -> PicOrgResult<()> {
+pub fn delete_tag(db: &Db, name: &str) -> AppResult<()> {
     db.with_conn(|conn| {
         conn.execute(
             "DELETE FROM tags WHERE name = ?1 COLLATE NOCASE",
@@ -601,24 +583,23 @@ pub fn delete_tag(db: &Db, name: &str) -> PicOrgResult<()> {
 
 // -------- FTS --------
 
-fn rebuild_fts_row_tx(tx: &rusqlite::Transaction, image_id: i64) -> PicOrgResult<()> {
+fn rebuild_fts_row_tx(tx: &rusqlite::Transaction, image_id: i64) -> AppResult<()> {
     tx.execute("DELETE FROM images_fts WHERE rowid = ?1", params![image_id])?;
-    let row: Option<(String, Option<String>, Option<String>)> = tx
+    let row: Option<(String, Option<String>)> = tx
         .query_row(
-            "SELECT filename, title, comment FROM images WHERE id = ?1",
+            "SELECT filename, title FROM images WHERE id = ?1",
             params![image_id],
-            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            |r| Ok((r.get(0)?, r.get(1)?)),
         )
         .optional()?;
-    if let Some((filename, title, comment)) = row {
+    if let Some((filename, title)) = row {
         let tags = get_tags_for_image(tx, image_id)?.join(" ");
         tx.execute(
-            "INSERT INTO images_fts(rowid, title, comment, filename, tags)
-             VALUES (?1, ?2, ?3, ?4, ?5)",
+            "INSERT INTO images_fts(rowid, title, filename, tags)
+             VALUES (?1, ?2, ?3, ?4)",
             params![
                 image_id,
                 title.unwrap_or_default(),
-                comment.unwrap_or_default(),
                 filename,
                 tags
             ],
@@ -634,7 +615,7 @@ pub fn query_images(
     filter: &ImageFilter,
     sort: &ImageSort,
     page: &Pagination,
-) -> PicOrgResult<Page<ImageSummary>> {
+) -> AppResult<Page<ImageSummary>> {
     let mut where_clauses: Vec<String> = vec!["i.missing = 0".into()];
     let mut args: Vec<Value> = Vec::new();
 
@@ -649,14 +630,6 @@ pub fn query_images(
                 args.push(Value::Integer(*id));
             }
         }
-    }
-    if let Some(min) = filter.rating_min {
-        where_clauses.push("i.rating >= ?".into());
-        args.push(Value::Integer(min));
-    }
-    if let Some(max) = filter.rating_max {
-        where_clauses.push("(i.rating IS NULL OR i.rating <= ?)".into());
-        args.push(Value::Integer(max));
     }
     if let Some(after) = filter.taken_after {
         where_clauses.push("i.taken_at >= ?".into());
@@ -680,9 +653,6 @@ pub fn query_images(
     }
     if let Some(true) = filter.has_title {
         where_clauses.push("i.title IS NOT NULL AND i.title <> ''".into());
-    }
-    if let Some(true) = filter.has_comment {
-        where_clauses.push("i.comment IS NOT NULL AND i.comment <> ''".into());
     }
     if let Some(fts) = &filter.fts {
         let s = fts.trim();
@@ -753,8 +723,6 @@ pub fn query_images(
         (SortBy::TakenAt, SortDir::Desc) => "COALESCE(i.taken_at, i.mtime_ms) DESC, i.id DESC",
         (SortBy::Filename, SortDir::Asc) => "i.filename COLLATE NOCASE ASC, i.id ASC",
         (SortBy::Filename, SortDir::Desc) => "i.filename COLLATE NOCASE DESC, i.id DESC",
-        (SortBy::Rating, SortDir::Asc) => "COALESCE(i.rating, -1) ASC, i.id ASC",
-        (SortBy::Rating, SortDir::Desc) => "COALESCE(i.rating, -1) DESC, i.id DESC",
         (SortBy::AddedAt, SortDir::Asc) => "i.id ASC",
         (SortBy::AddedAt, SortDir::Desc) => "i.id DESC",
         (SortBy::Size, SortDir::Asc) => "i.size_bytes ASC, i.id ASC",
@@ -767,7 +735,7 @@ pub fn query_images(
 
         let sql = format!(
             "SELECT i.id, i.folder_id, i.path, i.filename, i.ext, i.size_bytes, i.mtime_ms,
-                    i.width, i.height, i.content_hash, i.taken_at, i.title, i.rating
+                    i.width, i.height, i.content_hash, i.taken_at, i.title
              FROM images i
              {}
              ORDER BY {}
@@ -794,7 +762,6 @@ pub fn query_images(
                 content_hash: row.get(9)?,
                 taken_at: row.get(10)?,
                 title: row.get(11)?,
-                rating: row.get(12)?,
             })
         })?;
         let items = rows.collect::<Result<Vec<_>, _>>()?;
@@ -820,7 +787,6 @@ fn fts_query_from_user(s: &str) -> String {
     }
     let mut parts: Vec<String> = tokens.iter().map(|t| format!("\"{}\"", t)).collect();
     if let Some(last) = parts.last_mut() {
-        // remove closing quote, add prefix wildcard
         if last.ends_with('"') {
             last.pop();
         }
@@ -831,7 +797,7 @@ fn fts_query_from_user(s: &str) -> String {
 
 // -------- Smart collections --------
 
-pub fn list_smart_collections(db: &Db) -> PicOrgResult<Vec<SmartCollection>> {
+pub fn list_smart_collections(db: &Db) -> AppResult<Vec<SmartCollection>> {
     db.with_conn(|conn| {
         let mut stmt = conn.prepare(
             "SELECT id, name, filter, sort_order FROM smart_collections
@@ -856,7 +822,7 @@ pub fn create_smart_collection(
     db: &Db,
     name: &str,
     filter: &ImageFilter,
-) -> PicOrgResult<SmartCollection> {
+) -> AppResult<SmartCollection> {
     db.with_conn(|conn| {
         let filter_json = serde_json::to_string(filter).unwrap_or_else(|_| "{}".into());
         let sort_order: i64 = conn
@@ -880,7 +846,7 @@ pub fn create_smart_collection(
     })
 }
 
-pub fn delete_smart_collection(db: &Db, id: i64) -> PicOrgResult<()> {
+pub fn delete_smart_collection(db: &Db, id: i64) -> AppResult<()> {
     db.with_conn(|conn| {
         conn.execute("DELETE FROM smart_collections WHERE id = ?1", params![id])?;
         Ok(())

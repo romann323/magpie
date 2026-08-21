@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { onScanProgress } from '../ipc'
+import { PRODUCT_NAME, PRODUCT_VERSION } from '../brand'
 import type { ScanProgress } from '../types'
 
 export function StatusBar() {
@@ -22,7 +23,7 @@ export function StatusBar() {
 
   return (
     <div className="h-7 border-t border-surface-border px-3 flex items-center text-[11px] text-slate-500 gap-3">
-      <span>PicOrg 0.1.0</span>
+      <span>{PRODUCT_NAME} {PRODUCT_VERSION}</span>
       {scan && (
         <>
           <span>·</span>

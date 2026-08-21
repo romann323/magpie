@@ -1,53 +1,63 @@
-# Welcome to PicOrg
+# Welcome to Magpie
 
-PicOrg is a fast, local, native photo-organiser for Windows (with future
-macOS support). It lets you pull one or more folders of images into a
-searchable library, tag and rate them, and organise them by metadata —
-all without uploading a single byte to the cloud.
+Magpie helps you get organised with the files already on your
+computer — photos, videos, scans, PDFs, whatever you keep. You point it
+at a folder, and it shows you every file inside that has room for
+tags. From there you can:
 
-This manual walks you through everything you need to get productive with
-PicOrg in an afternoon. If you're a developer looking for how the pieces
-fit together, see the companion **PicOrg Developer Guide**.
+- Give a file a **name** and add **tags** — short labels like `beach`,
+  `Christmas`, or `contract` — so you can find groups of files in
+  seconds later on.
+- Look at everything the file already knows about itself — resolution,
+  camera, when it was taken, page count for PDFs — right next to the
+  file.
+- Delete the ones you don't want any more.
 
-## What PicOrg is (and isn't)
+Everything stays on your computer. Nothing is uploaded, no account is
+needed, and you can keep using Magpie with no internet connection.
 
-| PicOrg **is**                                                        | PicOrg **is not**                                            |
-| -------------------------------------------------------------------- | ------------------------------------------------------------ |
-| A metadata-first organiser: tags, ratings, titles, comments          | A photo editor (no crop, no retouch, no filters)             |
-| A fast local viewer for large libraries (hundreds of thousands)      | A cloud service — no account, no upload, no telemetry        |
-| Interoperable: writes standard XMP that Lightroom & Explorer read    | A DAM with keyword hierarchies or face recognition (yet)     |
-| Free and open-source                                                 | A RAW developer                                              |
+## Why use Magpie?
 
-## Two-minute tour
+Most people end up with files scattered across folders like
+`Camera Roll`, `iPhone Backup 2019`, and `Family - Copy (2)`. Windows
+gives you those folders and not much more. Magpie gives you a proper
+way to sort through them:
 
-1. **Add a folder** — Click **Add folder** in the top bar and pick a
-   directory of images. PicOrg indexes it (scanning happens in parallel
-   and updates the grid live).
-2. **Browse** — Scroll through the virtualised grid on the left. Use
-   the sidebar to filter by rating, tag, or folder.
-3. **Edit** — Click any photo to open the details panel on the right.
-   Type a title, click a star for a rating, add tags. Everything saves
-   automatically.
-4. **Multi-select** — Ctrl-click (Windows) to select multiple photos.
-   The details panel switches to a batch view; add or remove tags,
-   set a rating, or delete in bulk.
-5. **Find** — Type in the search bar to filter across titles, comments,
-   filenames, and tags.
+- **Find things fast.** Type `beach` in the search box and every file
+  you tagged with `beach` shows up, no matter which folder it's in.
+- **Nothing gets moved.** Your files stay exactly where they are on
+  disk. Tags are saved *inside* the file itself — in the same standard
+  place Windows Explorer uses — so no extra sidecar files clutter your
+  folders (for the formats that support it).
+- **One tool for all your files.** Photos, videos, and documents all
+  live in the same library, side by side, with the same tag search.
 
-That's it. The rest of this manual is optional deep-diving.
+## A quick tour, in under two minutes
 
-## Where things live at a glance
+1. **Click "+ Add folder"** at the top of the window and pick a folder
+   full of files. Magpie gets to work reading everything it finds.
+2. **Scroll** through the files in the big central area — it stays
+   smooth even with tens of thousands.
+3. **Click a file** to open the details panel on the right. Type a
+   title. Add a tag. Everything saves as you go — there's no "Save"
+   button to remember.
+4. **Hold Ctrl while clicking** to pick several files at once, then
+   add the same tag to all of them.
+5. **Type in the search box** at the top to find files by their tag,
+   title, or filename.
 
-- **Your photos**: exactly where you put them. PicOrg never moves them.
-- **Your metadata**:
-    - Saved into an XMP **sidecar** file next to each photo
-      (`Photo.jpg` → `Photo.xmp`), and
-    - **Embedded inside the source JPEG** so tools like Windows
-      Explorer, the Photos app, Adobe Lightroom, and digiKam see the
-      same tags.
-- **The PicOrg index**: a single SQLite database plus a thumbnail cache
-  under `%APPDATA%\com.picorg.picorg\` — deleting that folder resets the
-  app but never touches your photos.
+That's the whole app in a nutshell. The rest of this manual explains
+each part in a bit more detail.
 
-The [Where your data lives](./data-storage.md) chapter has the full
-story if you want to know exactly what changes.
+## What Magpie is *not*
+
+- **Not an editor.** It won't crop, straighten, retouch, or convert
+  your files. Use another app for that.
+- **Not a backup service.** Your files stay on your computer. If your
+  hard drive fails, Magpie can't help — copy your files somewhere
+  safe (an external drive, OneDrive, etc.).
+- **Not a face-recogniser.** It won't guess who's in your photos or
+  auto-tag them.
+
+If you want any of those, Magpie is happy to sit next to whichever
+tool does them for you — it won't get in the way.

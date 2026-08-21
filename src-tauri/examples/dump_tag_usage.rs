@@ -1,16 +1,19 @@
 //! Prints how many images (and which) are tagged with the tag named in
-//! the `PICORG_QUERY_TAG` env var. Used by `scripts/test-multiselect-tag.ps1`
+//! the `MAGPIE_QUERY_TAG` env var. Used by `scripts/test-multiselect-tag.ps1`
 //! to verify that a batch tag save actually landed in the DB.
 
 fn main() {
-    let tag = std::env::var("PICORG_QUERY_TAG").unwrap_or_default();
+    // Old name kept as a fallback for compatibility with older invocations.
+    let tag = std::env::var("MAGPIE_QUERY_TAG")
+        .or_else(|_| std::env::var("PICORG_QUERY_TAG"))
+        .unwrap_or_default();
     let db_path = dirs::data_dir()
         .expect("data dir")
-        .join("com.picorg.picorg")
-        .join("picorg.db");
+        .join("com.magpie.app")
+        .join("library.db");
     println!("DB: {}", db_path.display());
     if tag.is_empty() {
-        println!("(no PICORG_QUERY_TAG set)");
+        println!("(no MAGPIE_QUERY_TAG set)");
         return;
     }
     let conn = rusqlite::Connection::open(&db_path).expect("open DB");

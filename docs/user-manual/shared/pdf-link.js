@@ -1,20 +1,20 @@
 /*
  * Injects a "Download PDF" button into the mdBook menu bar. The URL of
- * the PDF is derived from the site (../picorg-user-manual.pdf or
- * ../picorg-developer-guide.pdf) so this single script works for both
+ * the PDF is derived from the site (../magpie-user-manual.pdf or
+ * ../magpie-developer-guide.pdf) so this single script works for both
  * books without configuration.
  */
 (function () {
   function whichPdf() {
     var p = (location.pathname || '').replace(/\\/g, '/');
     if (p.indexOf('/user-manual/') !== -1) {
-      return { href: '../picorg-user-manual.pdf', label: 'PicOrg-User-Manual.pdf' };
+      return { href: '../magpie-user-manual.pdf', label: 'Magpie-User-Manual.pdf' };
     }
     if (p.indexOf('/developer/') !== -1) {
-      return { href: '../picorg-developer-guide.pdf', label: 'PicOrg-Developer-Guide.pdf' };
+      return { href: '../magpie-developer-guide.pdf', label: 'Magpie-Developer-Guide.pdf' };
     }
     // Local file:// preview: fall back to a sibling PDF.
-    return { href: '../picorg-user-manual.pdf', label: 'Download PDF' };
+    return { href: '../magpie-user-manual.pdf', label: 'Download PDF' };
   }
 
   function iconSvg() {
@@ -30,11 +30,11 @@
   function install() {
     var bar = document.getElementById('menu-bar');
     if (!bar) return;
-    if (document.querySelector('.picorg-pdf-button')) return;
+    if (document.querySelector('.doc-pdf-button')) return;
 
     var target = whichPdf();
     var a = document.createElement('a');
-    a.className = 'picorg-pdf-button';
+    a.className = 'doc-pdf-button';
     a.href = target.href;
     a.download = target.label;
     a.title = 'Download this manual as PDF';

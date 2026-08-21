@@ -36,8 +36,8 @@ export default function App() {
         const ids = [...sel.ids]
         const yes = await confirm(
           ids.length === 1
-            ? 'Move this image to the Recycle Bin?'
-            : `Move ${ids.length} images to the Recycle Bin?`,
+            ? 'Move this file to the Recycle Bin?'
+            : `Move ${ids.length} files to the Recycle Bin?`,
           {
             title: 'Delete',
             kind: 'warning',
@@ -63,7 +63,6 @@ export default function App() {
         return
       }
 
-      // Number keys 0-5 set rating on selection — future extension.
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)

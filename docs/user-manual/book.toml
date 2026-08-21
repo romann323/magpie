@@ -1,10 +1,10 @@
 [book]
-title = "PicOrg User Manual"
-authors = ["PicOrg Contributors"]
+title = "Magpie User Manual"
+authors = ["Magpie Contributors"]
 language = "en"
 multilingual = false
 src = "src"
-description = "How to organize your photos with PicOrg."
+description = "How to organize your photos with Magpie."
 
 [output.html]
 default-theme = "light"

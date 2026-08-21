@@ -18,7 +18,7 @@ subsequent runs — all while staying responsive.
     walk    others        else read
 ```
 
-Progress events (`picorg://scan { folder_id, done, total, current }`)
+Progress events (`app://scan { folder_id, done, total, current }`)
 are emitted every N files (default 20).
 
 ## Stage 1 — walk
@@ -43,7 +43,7 @@ denominator but otherwise do no work.
 
 ## Stage 3 — diff
 
-For each kept entry, PicOrg looks up the path in `images`:
+For each kept entry, Magpie looks up the path in `images`:
 
 ```
 SELECT id, mtime_ms FROM images WHERE path = ?1
@@ -64,10 +64,14 @@ worker:
 1. **Stat** — `fs::metadata(path)` for `size_bytes` and `mtime_ms`.
 2. **Content hash** — stream the file through `XXH3_128`. On an
    SSD this is disk-bound at ~2 GB/s; on HDD it's the bottleneck.
-3. **EXIF** — `kamadak-exif::Reader::read_from_container` for
+3. **Handler lookup** — `registry.for_ext(ext)` picks the
+   `FormatHandler` for the file's extension.
+4. **Technical read** — the handler's `read_technical` produces
+   ordered key/value pairs; those we recognise fold into
    `taken_at`, `camera_make`, `camera_model`, `width`, `height`.
-4. **XMP** — `metadata::read::read_all(path)` for `title`,
-   `rating`, `comment`, `tags`.
+5. **User meta** — `metadata::read::read_all` combines the
+   handler's `read_user` with any legacy sidecar for `title` and
+   `tags`.
 
 Any per-file failure is logged (`WARN`) and doesn't abort the
 folder scan. The file gets a row with whatever metadata succeeded;
@@ -91,9 +95,9 @@ The `upsert_image` SQL is:
 ```sql
 INSERT INTO images (path, folder_id, filename, ext, size_bytes, mtime_ms,
                     width, height, content_hash, taken_at,
-                    camera_make, camera_model, title, rating, comment,
+                    camera_make, camera_model, title,
                     meta_read_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(path) DO UPDATE SET
     size_bytes    = excluded.size_bytes,
     mtime_ms      = excluded.mtime_ms,
@@ -104,8 +108,6 @@ ON CONFLICT(path) DO UPDATE SET
     camera_make   = excluded.camera_make,
     camera_model  = excluded.camera_model,
     title         = excluded.title,
-    rating        = excluded.rating,
-    comment       = excluded.comment,
     meta_read_at  = excluded.meta_read_at;
 ```
 

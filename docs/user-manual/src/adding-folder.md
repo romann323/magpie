@@ -1,60 +1,67 @@
 # Adding your first folder
 
-PicOrg organises photos around **library folders**. A library folder is
-just any directory on your disk that you'd like PicOrg to keep an eye
-on — the app scans it recursively and shows every image it finds in the
-grid.
+Magpie needs to know which folders on your computer contain the files
+you want to organise. Once you tell it, it does the rest.
 
-## Adding a folder
+## Add a folder in three clicks
 
-1. Click **+ Add folder** in the top bar.
-2. Pick a folder in the system dialog. Windows OneDrive folders,
-   network shares, and long-path (`\\?\`) paths are all supported.
-3. Scanning starts immediately. The status bar at the bottom shows
-   `Scanning N photos…` and updates in real time.
+1. Click **+ Add folder** at the top of the window.
+2. In the dialog that opens, browse to the folder that has your
+   files — for example `C:\Users\me\Pictures\Vacation 2024`.
+3. Click **Select folder**.
 
-The grid populates as PicOrg discovers files: you can start browsing
-and editing before the scan is finished.
+That's it. Magpie starts looking through the folder right away. The
+bar at the bottom of the window shows what's happening
+("Reading 234 of 1,205 files…") and updates as it goes.
 
-## What "scanning" actually does
+You don't have to wait for it to finish — files appear in the
+window as they're found, so you can start browsing (and even tagging)
+straight away.
 
-For every image file, PicOrg:
+## What Magpie does when you add a folder
 
-1. Records its full path, size, modification time, and format.
-2. Reads embedded EXIF for taken-at time, camera make/model, and image
-   dimensions.
-3. Reads XMP (from the sidecar `.xmp` **or** from an APP1 segment inside
-   the JPEG itself) for title, rating, tags, and comment.
-4. Generates two thumbnail sizes (small and medium) into the cache.
-5. Computes a content hash so PicOrg can detect duplicates and
-   renames later.
+Behind the scenes, Magpie:
 
-Scanning uses all your CPU cores and is bounded by disk read speed. A
-first-time scan of 10 000 photos on an SSD takes a couple of minutes;
-subsequent rescans are near-instant because PicOrg only re-processes
-files whose modification time has changed.
+- **Looks in the folder and every folder inside it.** So adding
+  `Pictures` also picks up `Pictures\2020`, `Pictures\Kids`, and so
+  on. Video and document files are picked up too — see
+  [Supported file formats](./file-formats.md).
+- **Reads the built-in info** each file exposes: dimensions, camera,
+  duration, page count, and so on.
+- **Reads any tags or titles** already saved with the file (for
+  example, tags you added earlier in Windows Explorer).
+- **Makes small thumbnail previews** for images so the grid loads
+  instantly, even for very large libraries.
+
+Your original files are **not moved, renamed, or changed** in any
+way during this. Magpie only reads them.
 
 ## Adding more folders
 
-You can add as many library folders as you like. They all show up
-under **Library › Folders** in the sidebar. Click a folder name to
-filter the grid to just its photos.
+You can add as many folders as you like — one for your holidays, one
+for family, one for work documents, whatever suits you.
+
+Every folder you add appears under **Library › Folders** in the
+left-hand sidebar. Click a folder name there to see only the files
+inside that folder.
 
 ## Removing a folder
 
-Right-click a folder in the sidebar and choose **Remove from library**.
-This removes it from the PicOrg index and deletes the corresponding
-thumbnails. **Your photos and sidecar `.xmp` files are untouched.**
+Right-click the folder name in the sidebar and choose **Remove from
+library**. Magpie forgets about it — but **your files stay on your
+computer**. Removing a folder from Magpie is not the same as deleting
+it from your PC.
 
-## Rescanning
+## Refreshing when files change
 
-Photos added to a library folder outside of PicOrg (say, you dropped
-new files in with File Explorer) aren't discovered automatically. Two
-ways to fix that:
+If you drop new files into a folder using File Explorer, or edit
+some in another app, Magpie doesn't know about it right away. To
+catch up:
 
-- **Right-click a folder → Rescan** to rescan just that folder.
-- **Click Rescan in the top bar** to rescan every folder in the
-  library.
+- **Right-click a folder name** in the sidebar and choose **Rescan
+  folder**, or
+- Click **Rescan** at the top of the window to check every folder
+  at once.
 
-Rescans are incremental and safe: PicOrg only touches files that have
-changed, are new, or have disappeared.
+Rescanning is quick — Magpie only looks at files that have changed
+since the last time it checked.

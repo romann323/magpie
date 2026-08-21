@@ -33,7 +33,7 @@ are camelCase but Rust fields stay snake_case.
 
 ## `error.rs`
 
-`PicOrgError` enum (via `thiserror`):
+`AppError` enum (via `thiserror`):
 
 - `Io(std::io::Error)` — filesystem errors.
 - `Db(rusqlite::Error)` — DB errors.
@@ -42,8 +42,8 @@ are camelCase but Rust fields stay snake_case.
 - `Scan(String)` — scanner-specific issues.
 - `Internal(String)` — anything else.
 
-All commands return `PicOrgResult<T>` (= `Result<T, PicOrgError>`).
-The `Display` impl for `PicOrgError` is safe to surface to the user
+All commands return `AppResult<T>` (= `Result<T, AppError>`).
+The `Display` impl for `AppError` is safe to surface to the user
 (no absolute paths in strings without context).
 
 ## `db/mod.rs`
@@ -56,11 +56,11 @@ pub struct Db {
 }
 
 impl Db {
-    pub fn open(path: &Path) -> PicOrgResult<Self> { … }
+    pub fn open(path: &Path) -> AppResult<Self> { … }
 
-    pub fn with_conn<F, T>(&self, f: F) -> PicOrgResult<T>
+    pub fn with_conn<F, T>(&self, f: F) -> AppResult<T>
     where
-        F: FnOnce(&Connection) -> PicOrgResult<T>,
+        F: FnOnce(&Connection) -> AppResult<T>,
     { … }
 }
 ```
@@ -118,7 +118,7 @@ Pipeline for `add_library_folder` and `rescan_*`:
 5. **Upsert.** DB writes are serialised via the single connection
    mutex; scanner buffers batches to amortise txn overhead.
 6. **Thumbnails.** Enqueue small + medium.
-7. **Progress.** Emit `picorg://scan { done, total, current }`.
+7. **Progress.** Emit `app://scan { done, total, current }`.
 
 Scanning is bounded by disk read speed on cold cache and by CPU on
 warm cache.
@@ -139,45 +139,66 @@ encode via `webp::Encoder` at quality 80.
 `read_all(path) -> ImageMeta` runs the read pipeline:
 
 1. `exif::Reader::read_from_container` for taken time + camera fields.
-2. `xmp::extract_embedded_xmp(path)` for embedded XMP.
-3. `read_sidecar(sidecar_path_for(path))` for sidecar XMP.
-4. Merge sidecar-over-embedded via `apply_user_meta`.
+2. `xmp::extract_embedded_xmp(path)` for embedded XMP (JPEG APP1
+   or PNG iTXt).
+3. Read any legacy `<image>.xmp` sidecar for backward compatibility.
+4. Merge sidecar-over-embedded via `apply_user_meta` (sidecar wins
+   for user metadata so a Lightroom-authored `.xmp` still takes
+   effect on first scan).
 
 Non-fatal errors are collected into a per-file warning log; the
 scanner continues on the next file.
 
-## `core/metadata/xmp.rs`
+## `core/formats/`
 
-Everything XMP:
+The format handler framework. Each supported extension is owned by
+one `FormatHandler` implementation:
 
-- `extract_embedded_xmp(path)` — JPEG APP1 walker (used to be the
-  only reader path).
-- `parse_user_metadata(bytes)` — streaming `quick_xml` parser that
-  extracts the title / description / rating / subjects / MSFT
-  keywords we care about.
-- `build_xmp_packet(&UserMetadata)` — writes a standard XMP packet
-  with both `dc:subject` and `MicrosoftPhoto:LastKeywordXMP` for
-  round-trip with Windows Explorer.
-- `embed_xmp_in_source(path, packet_bytes)` — JPEG-only writer that
-  replaces or inserts an APP1 XMP segment atomically.
+- `mod.rs` — declares the `FormatHandler` trait, `TechnicalMeta`,
+  `UserMeta`, `FormatKind`, and the `FormatRegistry` that lives on
+  `AppServices`.
+- `xmp_packet.rs` — a hand-written streaming XMP reader/writer.
+  Extracts and rebuilds packets containing title, description,
+  rating, subjects, and Microsoft-Photo keywords. The description
+  and rating fields are preserved on read-modify-write even though
+  Magpie's UI no longer surfaces them.
+- `common.rs` — shared `atomic_write_bytes`, EXIF → technical
+  metadata, dimensions, and `write_not_supported_error` (for
+  read-only stubs).
+- `jpeg.rs`, `png.rs`, `webp.rs`, `gif.rs` — writable handlers.
+  Each parses the format's container, drops any old XMP block,
+  and splices in a freshly-built packet.
+- `tiff.rs`, `stubs.rs` — read-only handlers for TIFF, HEIC, PDF,
+  video, camera RAW, BMP, EXR, HDR, SVG, and more.
+
+Windows Explorer's *Tags* column resolves from either `dc:subject`
+or `MicrosoftPhoto:LastKeywordXMP`, so Magpie only emits the
+standard Dublin Core form.
 
 ## `core/metadata/write.rs`
 
-`merge_and_write_sidecar` is the single entry point for saves:
+`write_metadata_to_source` is the single entry point for saves and
+is now a thin façade over the registry:
 
-1. Read the *current* on-disk metadata (so we don't drop fields we
-   don't touch).
-2. Apply the patch fields (title / description / rating / subjects).
-3. `write_sidecar` — atomic temp+rename to `Photo.xmp`.
-4. `embed_xmp_in_source` — atomic temp+rename inside the source
-   file if it's a JPEG.
+1. **Handler lookup.** `registry.for_ext(ext).ok_or(UnsupportedFormat)?`.
+2. **Handler write.** `handler.write_user(path, &meta)?`. The
+   handler:
+   - reads current on-disk state,
+   - merges the incoming edits with `xmp_packet::merge_user_edits`
+     (preserving foreign fields),
+   - rebuilds the packet,
+   - splices it into the container,
+   - writes atomically via `common::atomic_write_bytes`.
+3. **Best-effort delete** of any leftover `<file>.xmp` from a
+   previous Magpie version or from Lightroom.
 
 Failure semantics:
 
-- Sidecar failure = whole operation fails (caller sees `Err`).
-- Embed failure = logged, sidecar is still written, whole op returns
-  `Ok`. Rationale: the sidecar is the authoritative fallback, and
-  losing embed on a read-only network share shouldn't kill an edit.
+- Unsupported format = `Err(_)` before any disk touch (read-only
+  handler's `write_user` returns immediately).
+- Embed failure (read-only file, disk full, corrupt file) = `Err(_)`.
+- Sidecar cleanup failure = logged as WARN, save still returns
+  `Ok(())` because the source file already carries the metadata.
 
 ## `commands/*.rs`
 
@@ -188,5 +209,5 @@ Common patterns:
 
 - `services: State<'_, Arc<AppServices>>` for shared state.
 - `app_handle: AppHandle` for emitting events.
-- Return `PicOrgResult<T>`; Serde does the JSON legwork.
-- Tracing spans on entry so `picorg.log` shows every IPC hit.
+- Return `AppResult<T>`; Serde does the JSON legwork.
+- Tracing spans on entry so `app.log` shows every IPC hit.

@@ -1,15 +1,15 @@
-# PicOrg
+# Magpie
 
-Desktop app for organizing photos by metadata. Add folders, scan for images, edit their title / rating / tags / comments, and browse or filter your library by that metadata. All metadata is written back to disk as XMP so it's interoperable with Adobe Lightroom, digiKam, Adobe Bridge, and other tools.
+Desktop app for organizing photos by metadata. Add folders, scan for images, edit their title / rating / tags / comments, and browse or filter your library by that metadata. All metadata is written back **inside the source image file** as XMP so it's interoperable with Adobe Lightroom, digiKam, Adobe Bridge, and Windows Explorer.
 
 Built with **Tauri 2 + React + TypeScript + Rust** for a small footprint (~13 MB executable, ~3.4 MB installer) and native performance.
 
 ## Features (v0.1)
 
 - **Multiple watched folders** — recursively scan any number of folders.
-- **Wide format support** — JPEG, PNG, WebP, GIF, BMP, TIFF (thumbnails + metadata) plus RAW (metadata only).
+- **Wide format support (read)** — JPEG, PNG, WebP, GIF, BMP, TIFF, HEIC/HEIF, plus common camera RAW formats (CR2, CR3, NEF, ARW, DNG, RAF, ORF, RW2, SRW). EXIF + XMP are extracted where present, and legacy `.xmp` sidecars are picked up for backward compatibility.
 - **Metadata editing** — Title, Rating (0–5 stars), Tags, Comments.
-- **Portable metadata** — written as sidecar `.xmp` files (Lightroom-compatible; the original image files are never modified).
+- **Portable metadata (write)** — embedded directly inside JPEG (APP1) and PNG (`iTXt`) source files so Windows Explorer, Lightroom, Bridge, and digiKam all see the same tags. Never creates sidecar files; for formats we can't embed into yet (RAW, HEIC, TIFF, WebP, GIF, BMP) the UI surfaces a clear "unsupported format" message.
 - **Fast, virtualized grid** — comfortably browses libraries of thousands of images.
 - **Filters** — by folder, minimum rating, tag, or free-text search across title/comment/filename/tags.
 - **Sorting** — by capture date, filename, rating, size, or added order.
@@ -40,8 +40,8 @@ npm run tauri:build
 
 Build outputs:
 
-- `src-tauri/target/release/picorg.exe` — the standalone executable (~13 MB).
-- `src-tauri/target/release/bundle/nsis/PicOrg_<version>_x64-setup.exe` — the installer (~3.4 MB).
+- `src-tauri/target/release/desktop.exe` — the standalone executable (~13 MB).
+- `src-tauri/target/release/bundle/nsis/Magpie_<version>_x64-setup.exe` — the installer (~3.4 MB).
 
 ## Documentation
 
@@ -78,17 +78,20 @@ Chrome for the PDF rendering.
 ┌─────────────────▼───────────────────────────┐
 │  Rust core                                   │
 │  ├─ Folder scanner (jwalk + tokio)           │
-│  ├─ Metadata reader (EXIF, XMP, sidecar)    │
-│  ├─ Metadata writer (XMP sidecar, atomic)   │
-│  ├─ Thumbnail generator (fast_image_resize) │
-│  └─ SQLite index (rusqlite + FTS5)          │
+│  ├─ Metadata reader (EXIF + embedded XMP     │
+│  │   in JPEG APP1 / PNG iTXt; legacy .xmp    │
+│  │   sidecars still read for compatibility)  │
+│  ├─ Metadata writer (embeds XMP inside the   │
+│  │   source file, atomic temp+rename)        │
+│  ├─ Thumbnail generator (fast_image_resize)  │
+│  └─ SQLite index (rusqlite + FTS5)           │
 └─────────────────┬───────────────────────────┘
                   │
 ┌─────────────────▼───────────────────────────┐
-│  Your image folders + %APPDATA%\PicOrg\     │
-│  ├─ Image files (untouched)                  │
-│  ├─ Image.xmp sidecars (metadata)            │
-│  ├─ picorg.db (SQLite index)                 │
+│  Your image folders + %APPDATA%\Magpie\     │
+│  ├─ Image files (only bytes ever changed:   │
+│  │   the XMP block inside the file itself)  │
+│  ├─ library.db (SQLite index)                 │
 │  └─ thumbs\ (WebP thumbnail cache)           │
 └─────────────────────────────────────────────┘
 ```
@@ -97,8 +100,8 @@ The file on disk is the source of truth. SQLite is a rebuildable cache — delet
 
 ## Where your data lives
 
-- **Metadata:** in an XMP sidecar file (`Photo.xmp`) next to each image. Uses the standard `dc:title`, `xmp:Rating`, `dc:description`, and `dc:subject` fields, so Lightroom, digiKam, Bridge, etc. read/write the same data.
-- **Index + cache:** `%APPDATA%\PicOrg\` — SQLite DB and WebP thumbnails.
+- **Metadata:** embedded directly inside the source image (JPEG APP1 XMP segment or PNG `iTXt` chunk with the Adobe-standard keyword `XML:com.adobe.xmp`). Uses `dc:title`, `xmp:Rating`, `dc:description`, and `dc:subject` so Lightroom, digiKam, Bridge, and Windows Explorer read the same data. Legacy `.xmp` sidecars left by older Magpie versions or Lightroom are still read on first scan and then cleaned up by the next save.
+- **Index + cache:** `%APPDATA%\com.magpie.app\` — SQLite DB and WebP thumbnails.
 
 ## Cross-platform
 

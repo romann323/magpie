@@ -1,58 +1,59 @@
 # Searching and filtering
 
-## Full-text search
+Once you've added tags and titles to a good number of files, finding
+them again is a treat. Type a word or two in the search box at the
+top of the window and the grid narrows down to matching files while
+you type.
 
-The search box at the top of the window filters the grid live as you
-type. PicOrg uses SQLite's FTS5 (full-text search) engine over four
-fields:
+## What the search looks at
 
-- `title`
-- `comment`
-- `filename` (including the extension)
-- `tags`
+The search box looks in three places on every file:
 
-The default matching is **prefix-friendly** and case-insensitive, so
-typing `sun` finds photos titled *Sunset*, tagged `sunny`, in a file
-called `sunbathing.jpg`, or with a comment mentioning "sunrise".
+- The **title** you typed.
+- The **tags** you added.
+- The **filename** (like `IMG_4523.jpg` or `contract_signed.pdf`).
 
-### Boolean operators
+So if you type `sun`, Magpie finds files titled *Sunset*, tagged
+`sunny`, or in a file called `sunbathing.jpg`.
 
-Because FTS5 is under the hood, you can also write more elaborate
-queries:
+Capital letters don't matter: `Beach` and `beach` find the same
+files. Accents don't matter either: `naive` finds files where you
+typed `naïve`.
 
-- `vacation beach` — photos matching both terms (AND is implicit).
-- `vacation OR beach` — photos matching either.
-- `vacation -beach` — vacation photos that are not tagged beach.
-- `"family reunion"` — exact phrase.
-- `tag:2024` — restrict to a specific column (advanced).
+## Handy search tricks
 
-### Diacritics
+- **`beach vacation`** — finds files with **both** words somewhere.
+- **`beach OR mountain`** — finds files with **either** word.
+- **`vacation -beach`** — vacation files that are **not** tagged
+  beach.
+- **`"family reunion"`** — the exact phrase, in that order.
 
-The tokenizer strips diacritics, so `naive` matches `naïve` and vice
-versa.
+You can even start typing part of a word — `sun` matches `sunset`,
+`sunny`, `sunbathing`.
 
-## Combining search with sidebar filters
+## Search + sidebar filters = laser-focused
 
-Search and sidebar filters compose with AND. For example, showing
-"5-star photos from `\Photos\Trips\Iceland` tagged `aurora` mentioning
-`glacier`" is:
+The search box works together with the filters on the left. For
+example, to find *the Iceland files tagged `glacier`*:
 
-1. Click the Iceland folder in the sidebar.
-2. Click **5 stars and up** in the sidebar.
-3. Click the `aurora` tag in the sidebar.
-4. Type `glacier` in the search box.
+1. Click the folder `Iceland` on the left.
+2. Click the `glacier` tag in the Tags list.
 
-The status bar at the bottom always shows the count of images matching
-your current combined filter.
+The grid updates instantly. When you're done, click **All photos**
+in the sidebar to reset everything.
 
 ## Clearing the search
 
-Click the `×` inside the search box (or press <kbd>Esc</kbd> while
-focused there) to clear the query. Sidebar filters aren't touched.
+Click the little **×** inside the search box to clear it — or press
+**Esc** while your cursor is inside the box. The sidebar filters
+stay where they were.
 
-## Search performance
+## Nothing found?
 
-FTS5 is fast. On a 250 000-photo library, a query typically returns
-results in a few milliseconds. If a query ever feels slow, it's
-usually because a big filter change is invalidating cached thumbnails
-being redrawn — the query itself finishes long before the grid.
+If a search turns up empty and you were expecting results:
+
+- Check for a typo. `caht` won't find `cat` files.
+- Try a shorter word. `mount` finds both `mountain` and `mountains`.
+- Check the sidebar — you might have a filter active (like a folder
+  or tag) that's excluding matches. Click **All photos** and try the
+  search again.

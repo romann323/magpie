@@ -1,118 +1,116 @@
-//! Writing user metadata to disk.
+//! Metadata writer. Persists the caller-supplied Title + Tags edits back into
+//! the source file by delegating to the format handler for its extension,
+//! then best-effort deletes any leftover legacy `.xmp` sidecar.
 //!
-//! v1 policy: always write an XMP **sidecar** file next to the image.
-//! This is universally safe (never mutates the original), works for every
-//! input format (JPEG, PNG, HEIC, RAW, TIFF, WebP…), and is the same
-//! convention Adobe Lightroom uses for RAW files.
+//! On failure (unsupported format, read-only file, ...) the underlying
+//! handler error is bubbled up — the UI surfaces it verbatim so the user
+//! knows the save didn't land.
 
-use crate::core::metadata::read as meta_read;
+use crate::core::formats::{win_shell, FormatRegistry, UserMeta};
 use crate::core::metadata::sidecar::sidecar_path_for;
-use crate::core::metadata::xmp::{build_xmp_packet, embed_xmp_in_source, UserMetadata};
-use crate::error::{PicOrgError, PicOrgResult};
-use std::io::Write;
+use crate::error::{AppError, AppResult};
 use std::path::Path;
 
-/// Write the given user metadata to the sidecar file for `image_path`.
-/// This is atomic on Windows: writes to `sidecar.tmp` then renames.
-pub fn write_sidecar(image_path: &Path, meta: &UserMetadata) -> PicOrgResult<()> {
-    let sidecar = sidecar_path_for(image_path);
-    let tmp = sidecar.with_extension("xmp.tmp");
+/// Persist the given `title` and `tags` to `path`. `None` on any field
+/// means "leave it alone"; an empty tags vector means "clear all tags".
+///
+/// Dispatch order:
+/// 1. If the format's [`FormatHandler`](crate::core::formats::FormatHandler)
+///    can write tags natively (JPEG/PNG/WebP/GIF today), it's authoritative
+///    and gets exclusive control over the file bytes.
+/// 2. Otherwise, on Windows, fall back to the Shell property system
+///    ([`win_shell`]). This is the exact same mechanism Explorer's
+///    *Properties → Details* dialog uses, so anything the user tagged with
+///    Windows is also visible to Magpie and vice-versa.
+/// 3. If neither path is available we return a `MetadataWrite` error that
+///    the UI surfaces verbatim.
+pub fn write_metadata_to_source(
+    registry: &FormatRegistry,
+    path: &Path,
+    title: Option<Option<String>>,
+    tags: Option<Vec<String>>,
+) -> AppResult<()> {
+    let ext = path
+        .extension()
+        .and_then(|s| s.to_str())
+        .unwrap_or("")
+        .to_string();
 
-    let xml = build_xmp_packet(meta);
-
-    // Atomic replace: write to .tmp, then rename over the target.
-    {
-        let mut f = std::fs::File::create(&tmp).map_err(|e| {
-            PicOrgError::MetadataWrite(format!("create {}: {e}", tmp.display()))
-        })?;
-        f.write_all(xml.as_bytes())
-            .map_err(|e| PicOrgError::MetadataWrite(format!("write {}: {e}", tmp.display())))?;
-        f.sync_all().ok();
-    }
-    // On Windows, `rename` will fail if the target exists — use a shim.
-    replace_file(&tmp, &sidecar).map_err(|e| {
-        PicOrgError::MetadataWrite(format!(
-            "rename {} → {}: {e}",
-            tmp.display(),
-            sidecar.display()
+    let handler = registry.for_ext(&ext).ok_or_else(|| {
+        AppError::MetadataWrite(format!(
+            "'{}' files are not recognised by {}.",
+            ext,
+            crate::brand::PRODUCT_NAME
         ))
     })?;
 
-    Ok(())
-}
+    // Read existing user meta first so the read-modify-write cycle keeps
+    // fields the caller didn't patch (title if only tags changed and vice
+    // versa) and preserves foreign fields we don't surface (rating,
+    // description). The XMP handlers do this preservation internally.
+    // For non-writable handlers we consult the Shell store instead.
+    let existing = if handler.can_write_tags() {
+        handler.read_user(path).unwrap_or_default()
+    } else {
+        win_shell::read_user_meta(path).unwrap_or_default()
+    };
 
-/// Read current metadata from disk, apply changes, write it back.
-///
-/// Two-pronged persistence:
-/// 1. **Sidecar `.xmp`** next to the source (Lightroom-standard, universal).
-/// 2. **Embedded XMP inside the source file** (JPEG/PNG) so tools that don't
-///    read sidecars — Windows Explorer, Photos app, most viewers — also see
-///    the tags/title/rating. Formats we can't embed into (HEIC, RAW, TIFF,
-///    WebP…) still get the sidecar.
-///
-/// If embedding fails (e.g. the source file is read-only or on a mount that
-/// forbids rewrites), we still return `Ok(())` after writing the sidecar so
-/// the user's edit isn't lost. The embed error is surfaced via `tracing::warn`.
-pub fn merge_and_write_sidecar(
-    image_path: &Path,
-    patch_title: Option<Option<String>>,
-    patch_description: Option<Option<String>>,
-    patch_rating: Option<Option<i64>>,
-    patch_subjects: Option<Vec<String>>,
-) -> PicOrgResult<()> {
-    let existing = meta_read::read_all(image_path).ok();
-
-    let mut m = UserMetadata::default();
-    if let Some(e) = existing {
-        m.title = e.title;
-        m.description = e.comment;
-        m.rating = e.rating;
-        if !e.tags.is_empty() {
-            m.subjects = Some(e.tags);
-        }
+    let mut edits = UserMeta {
+        title: existing.title,
+        tags: existing.tags,
+    };
+    if let Some(t) = title {
+        edits.title = t;
+    }
+    if let Some(new_tags) = tags {
+        edits.tags = new_tags;
     }
 
-    if let Some(t) = patch_title {
-        m.title = t;
-    }
-    if let Some(d) = patch_description {
-        m.description = d;
-    }
-    if let Some(r) = patch_rating {
-        m.rating = r;
-    }
-    if let Some(s) = patch_subjects {
-        m.subjects = if s.is_empty() { None } else { Some(s) };
+    // The `path` we've been given comes straight from `images.path` in the
+    // DB — set by the folder scanner from the file's absolute location on
+    // disk. Log it explicitly so anyone auditing the write pipeline can
+    // confirm nothing points at a thumbnail cache.
+    tracing::info!(source = %path.display(), ext, "writing metadata to source file");
+
+    if handler.can_write_tags() {
+        handler.write_user(path, &edits)?;
+        tracing::info!(?path, handler = handler.name(), "embedded metadata (native)");
+    } else {
+        // Windows Shell fallback. On non-Windows this returns an error
+        // explaining the platform gap.
+        win_shell::write_user_meta(path, &edits).map_err(|e| {
+            // Enrich the error with the actual extension so the UI can guide
+            // the user (e.g. "install Sigma Photo Pro's property handler").
+            AppError::MetadataWrite(format!(
+                "Couldn't save tags to '{}' ({}). {}",
+                path.display(),
+                ext,
+                trim_leading_prefix(&e.to_string())
+            ))
+        })?;
+        tracing::info!(?path, handler = handler.name(), "embedded metadata (Windows Shell)");
     }
 
-    // Always write the sidecar first (safe, universal fallback).
-    write_sidecar(image_path, &m)?;
-
-    // Then try to embed into the source file itself. For formats we don't
-    // support this returns Ok(false); for supported formats an error is
-    // logged but doesn't fail the whole save (the sidecar is enough).
-    let xmp_bytes = build_xmp_packet(&m).into_bytes();
-    match embed_xmp_in_source(image_path, &xmp_bytes) {
-        Ok(true) => {
-            tracing::info!(?image_path, "embedded XMP into source file");
-        }
-        Ok(false) => {
-            tracing::debug!(?image_path, "format does not support embedded XMP; sidecar only");
-        }
-        Err(e) => {
-            tracing::warn!(?image_path, error = %e, "embedded XMP write failed; sidecar still written");
+    // Clean up any leftover legacy `.xmp` sidecar. Best-effort — failure to
+    // delete is logged but doesn't fail the save (the source file has the
+    // metadata now, so nothing is lost).
+    let sidecar = sidecar_path_for(path);
+    if sidecar.exists() {
+        match std::fs::remove_file(&sidecar) {
+            Ok(()) => tracing::info!(?sidecar, "removed legacy XMP sidecar after embed"),
+            Err(e) => tracing::warn!(?sidecar, error = %e, "could not remove legacy sidecar"),
         }
     }
     Ok(())
 }
 
-#[cfg(windows)]
-fn replace_file(src: &Path, dst: &Path) -> std::io::Result<()> {
-    // std::fs::rename on Windows replaces if the destination is a file.
-    std::fs::rename(src, dst)
-}
-
-#[cfg(not(windows))]
-fn replace_file(src: &Path, dst: &Path) -> std::io::Result<()> {
-    std::fs::rename(src, dst)
+/// Strip the leading `"metadata write error: "` (or similar) from a
+/// bubbled-up [`AppError`] display so the outer message doesn't say "error:
+/// error: ...".
+fn trim_leading_prefix(s: &str) -> &str {
+    if let Some(rest) = s.strip_prefix("metadata write error: ") {
+        rest
+    } else {
+        s
+    }
 }

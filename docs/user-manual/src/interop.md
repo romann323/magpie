@@ -1,75 +1,71 @@
-# Interoperability with other tools
+# Working with other tools
 
-PicOrg is designed to be a **good citizen** in a mixed toolchain. It
-writes only industry-standard XMP, in two places (sidecar and embedded),
-so it plays nice with:
+Your tags and titles aren't locked inside Magpie. For file formats
+Magpie can write into (JPEG, PNG, WebP, GIF), Magpie saves them the
+standard way — inside the file itself — so other tools can read
+them too, and Magpie can read tags added by other tools.
 
-## Windows File Explorer
+## Windows Explorer
 
-- **Reads:** PicOrg tags show up in the *Details* tab (right-click a
-  photo → Properties → Details), and in the *Tags* column when you
-  enable it in a folder view.
-- **Writes:** Tags you add through Explorer's Details tab are written
-  as `MicrosoftPhoto:LastKeywordXMP` **inside the JPEG**. PicOrg picks
-  those up on the next rescan (or when you next open the details
-  panel for that photo).
+- **Tags you add in Magpie show up in Explorer.** Right-click a
+  file → **Properties** → **Details** tab. Your tags are in the
+  *Tags* row and your title in *Title*.
+- **Tags you add in Explorer show up in Magpie.** After you type a
+  tag in Explorer's Details tab, click **Rescan** in Magpie (or
+  wait for the next time you click that file). The tag appears.
+
+> **Note.** Explorer caches things aggressively. If a tag you just
+> added isn't showing, press F5 in the folder or navigate away and
+> back.
 
 ## Windows Photos app
 
-- **Reads:** Titles and ratings written by PicOrg show up.
-- **Writes:** Very little; ratings you set in Photos are read by PicOrg
-  on next rescan.
+The built-in Photos app reads titles that Magpie wrote. Not all
+metadata is editable there, but you'll see it.
 
-## Adobe Lightroom Classic
+## Adobe Lightroom, Adobe Bridge, digiKam
 
-- **Sidecar path.** Lightroom writes `.xmp` sidecars using exactly the
-  same convention PicOrg does (`Photo.CR2` → `Photo.xmp`). Both tools
-  read each other's sidecars without a fuss.
-- **Standard fields.** `xmp:Rating`, `dc:title`, `dc:description`,
-  `dc:subject` are all interoperable.
-- **Metadata sync.** If you edit metadata in Lightroom, run
-  Metadata → *Save Metadata to File* to force a sidecar update, then
-  Rescan in PicOrg. Or the other way around.
+These are photo tools used by pros and enthusiasts. All of them
+read the same XMP tag/title format Magpie uses. So a library you
+tag in Magpie opens up in Lightroom with everything already
+labelled — and vice versa. Any star ratings or captions those tools
+wrote are **preserved** by Magpie when it saves your edits, even
+though the current Magpie UI doesn't show them.
 
-## Adobe Bridge
+Some tools cache their view of a folder. If your changes aren't
+appearing, use the "refresh" or "reload metadata" option in the
+other tool.
 
-Reads and writes the same XMP that Lightroom does — everything above
-applies unchanged.
+## Other tools
 
-## digiKam
+Many smaller viewers (XnView, FastStone, IrfanView, and so on) can
+read tags in this standard format too. If your tool has a "read XMP
+metadata" option, turn it on.
 
-- **Reads embedded XMP** by default (no sidecar dependency) — PicOrg's
-  embedded XMP writes make everything visible immediately.
-- Also reads sidecars if configured to. Consistent both ways.
+## What if I tag a RAW file, HEIC, PDF, or video?
 
-## darktable
+Some file formats don't have a safe standard way for Magpie to embed
+tags inside them yet, so **for these files Magpie stores your tags
+in its own library only**. The tag will still appear in Magpie —
+the file itself is left untouched.
 
-Reads `.xmp` sidecars natively (darktable uses sidecars for its own
-edit history), so PicOrg tags/ratings/titles show up alongside the
-darktable edits. No conflict — the two tools use non-overlapping XMP
-namespaces.
+See [Supported file formats](./file-formats.md) for the full
+read-only list. If you shoot RAW+JPEG, Magpie can tag the JPEG
+version instead, and those tags are then visible in Windows
+Explorer, Lightroom, and every other standard tool.
 
-## XnView, FastStone, IrfanView, ExifTool
+## Migrating from an older Magpie or Lightroom
 
-All of these read standard XMP from either the sidecar or the embedded
-segment, so PicOrg edits are visible.
+Earlier Magpie versions (and Adobe Lightroom for RAW files) sometimes
+left small `.xmp` companion files next to your files. Magpie still
+reads those on first scan, so you keep your existing tags — but the
+first time you save an edit, Magpie embeds the tags into the file
+itself and removes the leftover `.xmp`. From that point on, the file
+is the only place your tags live.
 
-## The one field that's slightly non-standard
+## In short
 
-Windows Explorer historically stores tags in a Microsoft-only field
-called `MicrosoftPhoto:LastKeywordXMP` in addition to standard
-`dc:subject`. To make sure a tag added in Explorer round-trips
-correctly, PicOrg **reads both** and **writes both**. Non-Microsoft
-tools happily ignore the extra field.
-
-## The one thing PicOrg doesn't yet do
-
-- **RAW files (CR2, NEF, ARW, DNG, RAF, …):** PicOrg reads their EXIF
-  and existing sidecars, but writes only the sidecar — the RAW file
-  itself is never modified. This is intentional: modifying RAWs
-  in-place is risky, and Lightroom's convention is sidecar-only for
-  RAW too.
-
-If you need embedded XMP in a RAW to be visible in a tool that only
-reads embedded metadata, use PicOrg's sidecar and then run
-`exiftool -tagsfromfile Photo.xmp Photo.CR2` in the same folder.
+If your other tool speaks the standard XMP metadata language (and
+almost every modern one does), it reads and writes the same tags and
+titles Magpie does — as long as the file format allows embedded XMP.
+You can move between tools freely without losing your work.

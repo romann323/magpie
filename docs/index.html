@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>PicOrg — Documentation</title>
+    <title>Magpie — Documentation</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -53,13 +53,13 @@
         width: 48px;
         height: 48px;
         border-radius: 12px;
-        background: linear-gradient(135deg, var(--accent), var(--accent-2));
-        display: grid;
-        place-items: center;
-        color: white;
-        font-weight: 700;
-        font-size: 22px;
-        box-shadow: 0 10px 30px rgba(99, 102, 241, 0.35);
+        overflow: hidden;
+        flex-shrink: 0;
+      }
+      .logo svg {
+        display: block;
+        width: 100%;
+        height: 100%;
       }
       .brand { font-size: 22px; font-weight: 700; letter-spacing: -0.01em; color: var(--text-strong); }
       .brand-sub { color: var(--text-dim); font-size: 14px; font-weight: 500; margin-top: 2px; }
@@ -235,9 +235,19 @@
   <body>
     <main>
       <header>
-        <div class="logo">P</div>
+        <div class="logo" aria-hidden="true">
+          <svg viewBox="0 0 128 128" width="48" height="48" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect width="128" height="128" rx="28" fill="#1E1B4B"/>
+            <circle cx="64" cy="64" r="44" fill="#4F46E5"/>
+            <circle cx="64" cy="64" r="36" fill="#312E81"/>
+            <path fill="#F8FAFC" d="M64 34c14 0 26 10 30 24 2 6 2 12 0 18-4 14-16 24-30 24s-26-10-30-24c-2-6-2-12 0-18 4-14 16-24 30-24zm0 8c-10 0-18 8-20 18-1 4-1 8 0 12 2 10 10 18 20 18s18-8 20-18c1-4 1-8 0-12-2-10-10-18-20-18z"/>
+            <path fill="#0F172A" d="M64 42c8 0 14 6 16 14 1 3 1 6 0 9-2 8-8 14-16 14s-14-6-16-14c-1-3-1-6 0-9 2-8 8-14 16-14z"/>
+            <circle cx="70" cy="50" r="2.5" fill="#F8FAFC"/>
+            <path fill="#A5B4FC" d="M78 56l8 4-8 3 2-7z"/>
+          </svg>
+        </div>
         <div>
-          <div class="brand">PicOrg</div>
+          <div class="brand">Magpie</div>
           <div class="brand-sub">Documentation</div>
         </div>
       </header>
@@ -266,10 +276,10 @@
           <p>
             Task-oriented guide covering everything from adding your first
             folder to bulk-tagging thousands of photos. Written for people who
-            want to <em>use</em> PicOrg without opening a source file.
+            want to <em>use</em> Magpie without opening a source file.
           </p>
           <ul class="card-toc">
-            <li>Installing and launching PicOrg</li>
+            <li>Installing and launching Magpie</li>
             <li>Adding library folders, browsing, and searching</li>
             <li>Editing metadata: titles, ratings, tags, comments</li>
             <li>Working on many photos at once</li>
@@ -281,7 +291,7 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M13 5l7 7-7 7"/></svg>
               Read online
             </a>
-            <a class="btn btn-secondary" href="./picorg-user-manual.pdf" download="PicOrg-User-Manual.pdf">
+            <a class="btn btn-secondary" href="./magpie-user-manual.pdf" download="Magpie-User-Manual.pdf">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
               Download PDF
             </a>
@@ -303,7 +313,7 @@
           <p>
             Three modules — <strong>Functional Overview</strong>,
             <strong>Architecture</strong>, and <strong>Detailed Design</strong>
-            — for developers building, contributing to, or embedding PicOrg
+            — for developers building, contributing to, or embedding Magpie
             in their own workflow.
           </p>
           <ul class="card-toc">
@@ -317,7 +327,7 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M13 5l7 7-7 7"/></svg>
               Read online
             </a>
-            <a class="btn btn-secondary" href="./picorg-developer-guide.pdf" download="PicOrg-Developer-Guide.pdf">
+            <a class="btn btn-secondary" href="./magpie-developer-guide.pdf" download="Magpie-Developer-Guide.pdf">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
               Download PDF
             </a>
@@ -331,7 +341,7 @@
           <a href="https://rust-lang.github.io/mdBook/">mdBook</a>.
           PDFs generated from the HTML with headless Edge.
         </div>
-        <div>PicOrg v0.1.0 · MIT License</div>
+        <div>Magpie v0.1.0 · MIT License</div>
       </div>
     </main>
   </body>

@@ -3,23 +3,22 @@
 ## Entry point
 
 ```rust
-pub fn read_all(path: &Path) -> PicOrgResult<ImageMeta>;
+pub fn read_all(registry: &FormatRegistry, path: &Path) -> AppResult<ImageMetaFromFile>;
 ```
 
 Called from:
 
 - The scanner (initial scan and rescans), to populate the DB.
 - `get_image` (from a Tauri command), when a FS-refresh check
-  detects that the sidecar / source has changed since the DB last
-  saw it.
+  detects that the source file (or any legacy sidecar) has changed
+  since the DB last saw it.
 
-`ImageMeta` is the union of everything we can pull from disk:
+`ImageMetaFromFile` is the union of everything we can pull from disk
+that the DB stores:
 
 ```rust
-pub struct ImageMeta {
+pub struct ImageMetaFromFile {
     pub title:        Option<String>,
-    pub comment:      Option<String>,   // dc:description
-    pub rating:       Option<i64>,      // 0..=5
     pub tags:         Vec<String>,      // deduped, in insertion order
     pub taken_at:     Option<i64>,      // ms since Unix epoch
     pub camera_make:  Option<String>,
@@ -29,114 +28,90 @@ pub struct ImageMeta {
 }
 ```
 
+Note: `rating` and `comment` were dropped in migration 0003; they are
+no longer surfaced in the DB or in `ImageDetails`. The XMP builder
+still preserves any `xmp:Rating` / `dc:description` a foreign tool
+wrote — see [Metadata write path](./metadata-write.md).
+
 ## Stages
 
-### 1. EXIF
+### 1. Ask the handler
 
 ```rust
-let exif = exif::Reader::new()
-    .continue_on_error(true)
-    .read_from_container(&mut BufReader::new(File::open(path)?))?;
+let handler = registry.for_ext(ext).ok_or(AppError::UnsupportedFormat)?;
+let user      = handler.read_user(path)?;
+let technical = handler.read_technical(path);
 ```
 
-Fields extracted:
+`read_user` returns the editable surface (title + tags). `read_technical`
+returns the ordered `TechnicalMeta` list used by the UI and by the
+scanner for dimensions / EXIF-derived fields (camera, taken_at). See
+[File formats](./file-formats.md).
 
-| EXIF tag                  | ImageMeta field   |
-| ------------------------- | ----------------- |
-| `DateTimeOriginal`        | `taken_at`        |
-| `Make`                    | `camera_make`     |
-| `Model`                   | `camera_model`    |
-| `PixelXDimension` / EXIF or IFD dimensions | `width`  |
-| `PixelYDimension`         | `height`          |
+Each handler decides how to fetch this. All writable handlers use the
+shared `xmp_packet::parse_xmp` helper; read-only stubs typically only
+implement `read_technical` and return an empty `UserMeta` from
+`read_user`.
 
-`taken_at` parsing handles both `YYYY:MM:DD HH:MM:SS` and ISO-8601
-strings, and preserves the local time zone if `OffsetTimeOriginal`
-is present.
-
-If the file has no EXIF (PNG without an `eXIf` chunk, for
-example), we fall back to `image::image_dimensions(path)?` for the
-pixel size and leave the timing fields NULL.
-
-### 2. Embedded XMP
-
-```rust
-let embedded = xmp::extract_embedded_xmp(path).ok().flatten();
-```
-
-For JPEGs this walks APP segments looking for
-`http://ns.adobe.com/xap/1.0/\0` (see
-[Metadata write path](./metadata-write.md#jpeg-segment-writer) for
-the exact layout). Non-JPEG formats return `None` — v1's reader for
-PNG/HEIC/TIFF embedded XMP is on the roadmap.
-
-The read cap is 2 MiB — enough to catch a big Explorer-written XMP
-with a thumbnail while still being cheap. Files smaller than that
-are read in full anyway.
-
-### 3. Sidecar XMP
+### 2. Legacy sidecar XMP
 
 ```rust
 let sidecar = read_sidecar(&sidecar_path_for(path)).ok();
 ```
 
-Sidecar path is `<image basename>.xmp`. If the file exists it's
-parsed with the same XMP parser used for embedded.
+Sidecar path is `<file basename>.xmp`. Sidecars are a **legacy
+compatibility** path: Magpie no longer produces them, but older
+Magpie installs and other tools (Lightroom, digiKam) did, and users
+would lose data if we ignored them. If a sidecar file exists it's
+parsed with the same XMP parser used for embedded packets.
 
-### 4. Merge
+### 3. Merge
 
-`apply_user_meta` is called first with the embedded XMP (if any),
-then with the sidecar XMP (if any). The later call overwrites any
-field the earlier call set. Result: **sidecar wins over embedded**.
+`apply_user_meta` is called first with the handler's `UserMeta` (if
+any), then with the sidecar XMP (if any). The later call overwrites
+any field the earlier call set. Result: **sidecar wins over
+embedded**.
 
-Rationale: sidecar reflects the latest edit. Both Lightroom and
-digiKam follow this convention.
+Rationale: the sidecar (if it still exists) is by definition older
+than Magpie's current write path, but on first scan after upgrade
+we must respect edits already stored there. The precedence rule
+becomes moot after the first save into the source file, because
+`write_metadata_to_source` deletes the sidecar as part of its
+cleanup step.
+
+### 4. Technical fields folded in
+
+The scanner reads `technical` entries whose keys match well-known
+labels (`Dimensions`, `Taken`, `Make`, `Model`) and folds them into
+`ImageMetaFromFile` for storage in the DB. The rest of the list is
+purely display-time; it isn't persisted.
 
 ## XMP parser
 
-`parse_user_metadata(bytes) -> UserMetadata` is a hand-written
-streaming parser built on `quick_xml`. Uses a simple state
-machine:
-
-```
-Idle → SubjectBag → SubjectItem → SubjectBag → SubjectItem → …
-     ↘ MsKeywordBag → MsKeywordItem → …
-     ↘ Title → (li text captured) → Idle
-     ↘ Description → (li text captured) → Idle
-```
-
-- Recognises both element form (`<xmp:Rating>4</xmp:Rating>`) and
-  attribute form (`xmp:Rating="4"` on `<rdf:Description>`).
-- Recognises both `dc:subject` (standard) and
-  `MicrosoftPhoto:LastKeywordXMP` (Windows Explorer). Unions the two
-  sets, deduping case-insensitively while preserving the first
-  observed casing.
-- Handles both `<rdf:Alt>` and `<rdf:Seq>` inside `<dc:title>` and
-  `<dc:description>`; the `x-default` language item wins if present,
-  otherwise the first item.
-
-Everything is `<xmlns>` and `<case>` insensitive because tools in
-the wild are notoriously inconsistent (I've seen `<X:XMPMETA>`,
-`<x:xmpmeta>`, and mixed-case in the same file). See the
+`xmp_packet::parse_xmp(bytes) -> XmpUserMeta` is a hand-written
+streaming parser built on `quick_xml`. Uses a simple state machine
+and normalises casing/namespaces because tools in the wild are
+notoriously inconsistent (I've seen `<X:XMPMETA>`, `<x:xmpmeta>`,
+and mixed-case in the same file). See the
 `read_sidecar_case_variants` test.
+
+Recognises both `dc:subject` (standard) and
+`MicrosoftPhoto:LastKeywordXMP` (Windows Explorer); unions the two
+sets, deduping case-insensitively while preserving the first
+observed casing. Handles both `<rdf:Alt>` and `<rdf:Seq>` inside
+`<dc:title>`; the `x-default` language item wins if present,
+otherwise the first item.
 
 ## FS-refresh check
 
 Inside `get_image`, before returning, we call:
 
 ```rust
-fn refresh_needed_from_fs(
-    path: &Path,
-    sidecar_mtime_ms: Option<i64>,
-    meta_read_at: Option<i64>,
-) -> bool {
-    let last_read = meta_read_at.unwrap_or(0);
-    let src_mtime_ms = fs::metadata(path).and_then(|m| m.modified())
-        .ok()
-        .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
-        .map(|d| d.as_millis() as i64)
-        .unwrap_or(0);
-    let sidecar_mtime_ms = sidecar_mtime_ms.unwrap_or(0);
-    src_mtime_ms > last_read || sidecar_mtime_ms > last_read
+fn refresh_needed_from_fs(image_path: &Path, cached: &ImageDetails) -> bool {
+    let last_read = cached.meta_read_at.unwrap_or(0);
+    let src_mtime = mtime_ms(image_path);
+    let sidecar_mtime = mtime_ms(&sidecar_path_for(image_path));
+    src_mtime > last_read || sidecar_mtime > last_read
 }
 ```
 
@@ -144,5 +119,11 @@ If it returns `true`, we call `read_all`, `resync_user_meta_from_fs`
 (which updates the DB row), and `set_meta_read_at_now` — then serve
 the fresh state.
 
+We still watch the legacy sidecar's mtime here because a user might
+have run Lightroom against the same folder between two Magpie
+scans, updating a `.xmp` without touching the source. Once Magpie
+saves, the sidecar is cleaned up and the source-file mtime becomes
+the sole trigger.
+
 This is how an external tag edit (Windows Explorer) becomes visible
-in PicOrg on next click, without needing a full library rescan.
+in Magpie on next click, without needing a full library rescan.

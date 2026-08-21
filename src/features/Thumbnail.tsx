@@ -33,6 +33,9 @@ export function Thumbnail({
     }
   }, [id, size])
 
+  // The parent sizes us via `className` (typically `absolute inset-0 w-full
+  // h-full object-contain`). All three render states must respect that same
+  // frame so the tile layout stays stable while the thumbnail loads / fails.
   if (failed) {
     return (
       <div
@@ -49,9 +52,7 @@ export function Thumbnail({
   if (!src) {
     return (
       <div
-        className={
-          'bg-surface-hover animate-pulse ' + (className ?? '')
-        }
+        className={'bg-surface-hover animate-pulse ' + (className ?? '')}
       />
     )
   }

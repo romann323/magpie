@@ -1,57 +1,55 @@
-# Working on many photos at once
+# Working on many files at once
 
-Selecting more than one photo switches the details panel into
-**batch mode**. The title bar shows `N images selected` and the
-editable controls change to reflect what makes sense to apply in bulk.
+Editing files one at a time is fine when there are only a few. But
+when you have hundreds — say, an entire holiday — you'll want to
+tag them all in one go. Magpie is built for exactly that.
 
-## Selecting multiple photos
+## Picking several files
 
-- **Ctrl+click** — toggle a photo in the current selection.
-- **Shift+click** — extend the selection from the last-clicked photo
-  to the new one.
-- **Ctrl+A** — select everything currently visible in the grid.
-- Click a photo without a modifier to reset the selection back to a
-  single photo.
+- **Click** the first file.
+- **Ctrl + click** each of the other files you want to include.
+- Or **Shift + click** at the far end to grab everything in between.
+- **Ctrl + A** grabs every file in the current view.
 
-The selection persists as you scroll, so you can Ctrl+click a photo
-near the top, scroll down thousands of pictures, and Shift+click one
-at the bottom to grab a huge range.
+The details panel on the right immediately switches to a batch view
+that reads *"N files selected"*. The number ticks up as you add more.
 
-## Bulk rating
+## Adding tags to all of them
 
-Click a star in the **Set rating** control. That rating is applied to
-every selected photo immediately — no confirmation.
+Batch mode shows two tag boxes:
 
-Use rating `0` (the leftmost, empty-star click) to un-rate everything
-in the selection.
+- **Add tags** — anything you put here gets added to every selected
+  file. Files that already had the tag are simply left alone.
+- **Remove tags** — anything you put here gets removed from every
+  selected file.
 
-## Bulk tag add / remove
+You can queue up multiple tags before hitting the button. When you're
+ready, click **Apply tag changes to N files**. A confirmation appears
+when it's done: *"Updated N files."*
 
-The batch view has two tag inputs instead of one:
+> **Tip.** Add tags in bulk first, then use the sidebar to check
+> your work. Click the tag on the left — the grid narrows to just
+> the files that have it, and you can see whether everything landed
+> correctly.
 
-- **Add tags** — every tag you commit here is added to every
-  selected photo, without touching any tags they already have.
-- **Remove tags** — every tag you commit here is removed from every
-  selected photo (photos that didn't have the tag are unaffected).
+## Deleting them all at once
 
-Both fields let you queue up multiple tags before hitting the button.
-When you're ready, click **Apply tag changes to N images**. The button
-label counts down as it saves and shows a green *"Updated N images"*
-confirmation when done.
+At the bottom of the details panel there's a red **Delete N files**
+button. Click it, confirm the prompt, and the whole selection heads
+to the Recycle Bin. See [Deleting files](./deleting.md) for the full
+story.
 
-> **Tip.** In multi-select mode PicOrg doesn't show you the union of
-> tags already on the selection — it would be misleading (some photos
-> would have that tag, some wouldn't). Use single-select for that.
+## What if one file won't accept a change?
 
-## Bulk delete
+Two cases where a file gets skipped:
 
-Click **Delete N images** at the bottom of the details panel to move
-the whole selection to the Recycle Bin. A confirmation dialog appears
-first — see the [Deleting photos](./deleting.md) chapter for details.
+1. **The folder is read-only** (an old backup drive, or something you
+   pulled off a DVD). Fix the permissions on that folder (right-click →
+   *Properties* in File Explorer) and try again.
+2. **The file's format doesn't support embedded tags yet** (RAW,
+   HEIC, PDF, video…). Magpie still remembers the tag in its own
+   library, but it can't write it back into the file. The rest of the
+   batch gets updated normally.
 
-## What actually happens in bulk
-
-Every bulk operation is applied **photo by photo** on the backend. If
-one photo fails (say, its source folder is read-only) the others still
-succeed. When there are failures, PicOrg summarises them in a dialog
-after the run.
+Either way, Magpie shows a message at the end telling you which files
+were skipped and why.

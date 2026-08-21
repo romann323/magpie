@@ -1,6 +1,6 @@
 param(
-    [string]$Exe = "src-tauri\target\release\picorg.exe",
-    [string]$Out = "screenshots\picorg-launch.png",
+    [string]$Exe = "src-tauri\target\release\desktop.exe",
+    [string]$Out = "screenshots\magpie-launch.png",
     [int]$WaitSeconds = 10
 )
 
@@ -66,7 +66,7 @@ $cb = [Win+EnumWindowsProc] {
     $title = $sb.ToString()
     $ownerPid = 0
     [Win]::GetWindowThreadProcessId($h, [ref]$ownerPid) | Out-Null
-    if ($title -like "*PicOrg*" -and $ownerPid -ne 0) {
+    if ($title -like "*Magpie*" -and $ownerPid -ne 0) {
         $script:found += [pscustomobject]@{ Hwnd = $h; Title = $title; OwnerPid = $ownerPid }
     }
     return $true
@@ -77,7 +77,7 @@ Write-Host "Windows found: $($found.Count)"
 foreach ($w in $found) { Write-Host "  hwnd=$($w.Hwnd) pid=$($w.OwnerPid) title='$($w.Title)'" }
 
 if ($found.Count -eq 0) {
-    throw "No PicOrg window found"
+    throw "No Magpie window found"
 }
 
 $hwnd = $found[0].Hwnd

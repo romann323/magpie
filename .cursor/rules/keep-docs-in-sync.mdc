@@ -1,0 +1,91 @@
+---
+description: Keep the Magpie documentation in sync with every code / behaviour change.
+alwaysApply: true
+---
+
+# Keep documentation in sync
+
+Whenever you make a change to Magpie that a user or a developer could notice,
+you MUST also update the documentation in `docs/` in the same turn (or
+propose the doc edits alongside the code edits before the user approves).
+This is not optional and applies to every session.
+
+## When to update the User Manual (`docs/user-manual/src/`)
+
+Update it whenever any of the following changes:
+
+- A user-visible behaviour, wording, or workflow (buttons, dialogs, menus,
+  keyboard shortcuts, drag / click semantics).
+- Where the app stores things the user cares about (photos, sidecars,
+  tags, thumbnails, database, log files).
+- Supported file formats or platforms.
+- Interoperability with other tools (Windows Explorer, Lightroom, digiKam, …).
+- Any troubleshooting-relevant behaviour (new error messages, new failure
+  modes, new limits).
+
+Language rules for the user manual:
+
+- Assume the reader is NOT an IT professional. Use everyday words.
+- Avoid jargon: no "IPC", "FTS5", "sidecar", "atomic write", "virtualized",
+  "APPDATA", "async", "APP1 segment", etc. If a technical term is truly
+  needed (e.g. "XMP"), define it once in plain language and keep using
+  the plain phrasing after that ("an extra file next to the photo").
+- Prefer short sentences and concrete examples over abstract explanations.
+- Use second person ("you") and active voice.
+
+## When to update the Developer Guide (`docs/developer/src/`)
+
+Update it whenever any of the following changes:
+
+- **Architecture**: process model, threading model, IPC boundary, storage
+  strategy, metadata pipeline, logging or observability.
+- **Detailed design**:
+  - Repository layout (any new/renamed folder, module, or file that other
+    developers would look for).
+  - Database schema, migrations, or FTS behaviour.
+  - Any Tauri command signature, name, or set of registered commands
+    (`src-tauri/src/commands/*.rs` and `src-tauri/src/lib.rs` handler
+    registration).
+  - Any change to the scanner, thumbnail pipeline, metadata read path,
+    or metadata write path.
+  - Testing strategy or coverage decisions.
+  - Build tooling, release profile, or supported platforms.
+
+Language rules for the developer guide:
+
+- Concise and technically precise; you may (and should) use real Rust /
+  TypeScript type signatures, file paths, and SQL where they clarify.
+- Prefer diagrams-as-ASCII over prose walls for anything with control
+  or data flow.
+- Cross-reference other doc pages with markdown links rather than duplicating
+  large blocks of text.
+
+## Landing page and PDFs
+
+- Update `docs/index.html` when adding, removing, or renaming a top-level
+  section that a reader lands on first (e.g. adding a third book).
+- Regenerate PDFs after every doc content change by running:
+  ```powershell
+  npm run docs:build
+  ```
+  This rebuilds both mdBook sites and re-renders the two downloadable PDFs
+  (`docs/magpie-user-manual.pdf` and `docs/magpie-developer-guide.pdf`).
+
+## Discovery checklist before finishing a task
+
+Before you say "done" on any code / behaviour change, check yourself against:
+
+1. Did I change something a user could notice? → Did I update the User Manual?
+2. Did I change something a developer would want to know? → Did I update the
+   Developer Guide?
+3. Did I change a Tauri command's name, arguments, or event payload? → Did I
+   update `docs/developer/src/design/commands.md` and, if the change is
+   user-visible, the relevant User Manual page?
+4. Did I change the DB schema or add a migration? → Did I update
+   `docs/developer/src/design/schema.md`?
+5. Did I add or remove a supported file format? → Did I update both
+   the user manual's "Where your data lives" chapter and the developer
+   guide's scanner / metadata sections?
+6. Did I run `npm run docs:build` so the PDFs match the new HTML?
+
+If any answer is "no", finish that work before ending your turn.

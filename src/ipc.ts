@@ -91,16 +91,16 @@ export const toAssetUrl = (absPath: string): string => convertFileSrc(absPath)
 
 export const onScanProgress = (
   handler: (p: ScanProgress) => void,
-): Promise<UnlistenFn> => listen<ScanProgress>('picorg://scan', (e) => handler(e.payload))
+): Promise<UnlistenFn> => listen<ScanProgress>('app://scan', (e) => handler(e.payload))
 
 export const onImageUpdated = (
   handler: (id: number) => void,
-): Promise<UnlistenFn> => listen<number>('picorg://image-updated', (e) => handler(e.payload))
+): Promise<UnlistenFn> => listen<number>('app://image-updated', (e) => handler(e.payload))
 
 export const onImagesDeleted = (
   handler: (ids: number[]) => void,
 ): Promise<UnlistenFn> =>
-  listen<number[]>('picorg://images-deleted', (e) => handler(e.payload))
+  listen<number[]>('app://images-deleted', (e) => handler(e.payload))
 
 // ---------- Diagnostics ----------
 

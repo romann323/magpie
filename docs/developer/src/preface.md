@@ -1,12 +1,12 @@
 # Preface
 
-This is the developer-facing companion to the **PicOrg User Manual**. It is
-organised into three modules:
+This is the developer-facing guide that accompanies the **Magpie
+User Manual**. It is organised into three modules:
 
-- **Module 1 — Functional overview.** What PicOrg does, for whom, and
+- **Module 1 — Functional overview.** What Magpie does, for whom, and
   why. Read this first if you're new to the project or evaluating
-  whether PicOrg is a good fit for a use case.
-- **Module 2 — Architecture.** How PicOrg is put together at a
+  whether Magpie is a good fit for a use case.
+- **Module 2 — Architecture.** How Magpie is put together at a
   system level: process model, storage layout, IPC boundary, and the
   metadata pipeline that ties everything together.
 - **Module 3 — Detailed design.** File-by-file guided tour: schema,
@@ -38,8 +38,8 @@ introduces the concepts.
 ## Getting the code and building it
 
 ```bash
-git clone <repo> picorg
-cd picorg
+git clone <repo> magpie
+cd magpie
 npm install                # frontend deps
 cd src-tauri && cargo fetch  # backend deps
 cd ..

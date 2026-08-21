@@ -912,6 +912,38 @@ dependencies = [
 ]
 
 [[package]]
+name = "desktop"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "dirs 5.0.1",
+ "fast_image_resize",
+ "futures",
+ "image",
+ "jwalk",
+ "kamadak-exif",
+ "log",
+ "num_cpus",
+ "quick-xml 0.36.2",
+ "rayon",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-dialog",
+ "tauri-plugin-opener",
+ "thiserror 1.0.69",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "trash",
+ "windows 0.61.3",
+ "xxhash-rust",
+]
+
+[[package]]
 name = "digest"
 version = "0.10.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3128,37 +3160,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e57fef6bc5981e38c2ce2d63bfa546861309f875b8a75f092d1d54ae2d64f266"
 dependencies = [
  "siphasher",
-]
-
-[[package]]
-name = "picorg"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "chrono",
- "dirs 5.0.1",
- "fast_image_resize",
- "futures",
- "image",
- "jwalk",
- "kamadak-exif",
- "log",
- "num_cpus",
- "quick-xml 0.36.2",
- "rayon",
- "rusqlite",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "tauri-plugin-dialog",
- "tauri-plugin-opener",
- "thiserror 1.0.69",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "trash",
- "xxhash-rust",
 ]
 
 [[package]]

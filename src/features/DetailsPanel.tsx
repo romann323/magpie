@@ -11,7 +11,6 @@ import {
 } from '../ipc'
 import { useStore } from '../store'
 import type { ImageDetails, MetadataPatch } from '../types'
-import { StarRating } from './StarRating'
 import { TagInput } from './TagInput'
 
 export function DetailsPanel() {
@@ -24,7 +23,7 @@ export function DetailsPanel() {
       <aside className="border-l border-surface-border p-4 flex flex-col h-full text-slate-500 text-sm">
         <TitleBar onClose={() => setDetailsOpen(false)} label="Details" />
         <div className="grid place-items-center flex-1 text-center px-4">
-          Select an image to edit its metadata.
+          Select a file to edit its metadata.
         </div>
       </aside>
     )
@@ -74,14 +73,13 @@ function SingleDetails({ id, onClose }: { id: number; onClose: () => void }) {
     queryFn: () => getImage(id),
   })
 
-  // Local edit state. Only reset when the image *id* changes (or on first load).
-  // This prevents refetches triggered by other mutations from stomping the user's
-  // in-progress typing in the title/comment inputs.
+  // Only editable field the user drives directly from this panel is the title;
+  // tags have their own controlled component. We reset on id-change so switching
+  // the selection loads the newly-selected file's values.
   const [title, setTitle] = useState('')
-  const [comment, setComment] = useState('')
-  const [rating, setRating] = useState<number | null>(null)
   const [tags, setTags] = useState<string[]>([])
   const [saving, setSaving] = useState<string | null>(null)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   const lastLoadedId = useRef<number | null>(null)
 
@@ -90,41 +88,41 @@ function SingleDetails({ id, onClose }: { id: number; onClose: () => void }) {
     if (lastLoadedId.current === q.data.id) return
     lastLoadedId.current = q.data.id
     setTitle(q.data.title ?? '')
-    setComment(q.data.comment ?? '')
-    setRating(q.data.rating)
     setTags(q.data.tags)
+    setSaveError(null)
   }, [q.data])
 
   const applyPatch = async (patch: MetadataPatch, label: string) => {
     setSaving(label)
     try {
       const updated = await updateImageMetadata(id, patch)
-      // Update the cache directly so we don't trigger a refetch that would
-      // stomp any in-progress typing in other fields.
       qc.setQueryData(['image', id], updated)
-      // Grid & tag-cloud can refetch freely; they don't touch local edit state.
       qc.invalidateQueries({ queryKey: ['images'] })
       qc.invalidateQueries({ queryKey: ['tags'] })
+      setSaveError(null)
     } catch (e) {
       console.error('metadata save failed', e)
+      const msg =
+        e instanceof Error
+          ? e.message
+          : typeof e === 'string'
+            ? e
+            : JSON.stringify(e)
+      setSaveError(msg)
     } finally {
       setSaving(null)
     }
   }
 
-  // Debounced auto-save for text fields. onBlur also forces a save immediately.
   const debouncedSaveTitle = useDebouncedCallback((v: string) => {
     void applyPatch({ title: v.trim() === '' ? null : v }, 'title')
-  }, 600)
-  const debouncedSaveComment = useDebouncedCallback((v: string) => {
-    void applyPatch({ comment: v.trim() === '' ? null : v }, 'comment')
   }, 600)
 
   const deleteMutation = useMutation({
     mutationFn: async () => {
       const yes = await confirm(
-        `Move "${q.data?.filename ?? 'this image'}" to the Recycle Bin?\n\nYou can restore it from the Windows Recycle Bin afterwards.`,
-        { title: 'Delete image', kind: 'warning', okLabel: 'Move to Recycle Bin', cancelLabel: 'Cancel' },
+        `Move "${q.data?.filename ?? 'this file'}" to the Recycle Bin?\n\nYou can restore it from the Windows Recycle Bin afterwards.`,
+        { title: 'Delete file', kind: 'warning', okLabel: 'Move to Recycle Bin', cancelLabel: 'Cancel' },
       )
       if (!yes) return null
       return deleteImages([id])
@@ -154,6 +152,7 @@ function SingleDetails({ id, onClose }: { id: number; onClose: () => void }) {
   }
 
   const d = q.data
+  const isImage = isImagePreviewable(d.ext)
 
   return (
     <aside className="border-l border-surface-border p-4 h-full min-h-0 overflow-y-auto">
@@ -162,38 +161,28 @@ function SingleDetails({ id, onClose }: { id: number; onClose: () => void }) {
         onClose={onClose}
       />
 
-      <div className="bg-black/50 rounded-lg overflow-hidden aspect-video grid place-items-center mb-4">
-        <img
-          src={toAssetUrl(d.path)}
-          alt={d.filename}
-          className="max-w-full max-h-full object-contain"
-        />
+      <div className="bg-black/50 rounded-lg overflow-hidden aspect-video mb-4 relative">
+        {isImage ? (
+          <img
+            src={toAssetUrl(d.path)}
+            alt={d.filename}
+            className="absolute inset-0 w-full h-full object-contain"
+          />
+        ) : (
+          <div className="absolute inset-0 grid place-items-center text-center text-slate-500 px-4">
+            <div>
+              <div className="text-4xl mb-1">📄</div>
+              <div className="text-xs uppercase tracking-wider">
+                {d.ext.toUpperCase()}
+              </div>
+              <div className="text-[11px] mt-1">No inline preview</div>
+            </div>
+          </div>
+        )}
       </div>
 
-      <Field label="Filename">
-        <div className="text-sm text-slate-300 truncate" title={d.filename}>{d.filename}</div>
-      </Field>
-
-      <Field label="Path">
-        <div
-          className="text-[11px] text-slate-500 truncate cursor-text select-text"
-          title={d.path}
-        >
-          {d.path}
-        </div>
-      </Field>
-
-      <Field label="Rating">
-        <StarRating
-          value={rating}
-          onChange={(v) => {
-            setRating(v)
-            void applyPatch({ rating: v }, 'rating')
-          }}
-        />
-      </Field>
-
-      <Field label="Title">
+      {/* -------- Section 1: editable title -------- */}
+      <Section label="Title">
         <input
           className="input"
           placeholder="(no title)"
@@ -208,10 +197,12 @@ function SingleDetails({ id, onClose }: { id: number; onClose: () => void }) {
           onKeyDown={(e) => {
             if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
           }}
+          disabled={!d.canWriteTags}
         />
-      </Field>
+      </Section>
 
-      <Field label="Tags">
+      {/* -------- Section 2: editable tags -------- */}
+      <Section label="Tags">
         <TagInput
           tags={tags}
           onChange={(next) => {
@@ -219,28 +210,32 @@ function SingleDetails({ id, onClose }: { id: number; onClose: () => void }) {
             void applyPatch({ tags: next }, 'tags')
           }}
         />
-      </Field>
+        <WriteCapabilityHint d={d} />
+        {saveError && (
+          <div className="text-[11px] text-red-300 mt-1 whitespace-pre-wrap">
+            Save failed: {saveError}
+          </div>
+        )}
+      </Section>
 
-      <Field label="Comment">
-        <textarea
-          className="textarea"
-          rows={3}
-          placeholder="(no comment)"
-          value={comment}
-          onChange={(e) => {
-            setComment(e.target.value)
-            debouncedSaveComment(e.target.value)
-          }}
-          onBlur={() => {
-            void applyPatch(
-              { comment: comment.trim() === '' ? null : comment },
-              'comment',
-            )
-          }}
-        />
-      </Field>
+      {/* -------- Section 3: format-specific editable metadata --------
+       *
+       * We currently expose title + tags for every writable handler.
+       * Format-specific editable metadata (e.g. GPS, description) will land
+       * in this section as those handlers grow their surface area. For now
+       * we show the format handler name so users know which pipeline is
+       * active. */}
+      <Section label="Format metadata">
+        <div className="text-xs text-slate-400">
+          Handler:{' '}
+          <span className="text-slate-200">{d.formatHandler}</span>
+        </div>
+      </Section>
 
-      <Meta d={d} />
+      {/* -------- Section 4: read-only file info -------- */}
+      <Section label="File info">
+        <ReadOnlyList d={d} />
+      </Section>
 
       <div className="mt-4 pt-3 border-t border-surface-border">
         <button
@@ -250,44 +245,78 @@ function SingleDetails({ id, onClose }: { id: number; onClose: () => void }) {
           title="Move file to the Recycle Bin"
         >
           <TrashIcon />
-          {deleteMutation.isPending ? 'Deleting…' : 'Delete image'}
+          {deleteMutation.isPending ? 'Deleting…' : 'Delete file'}
         </button>
         <div className="text-[11px] text-slate-500 mt-1 text-center">
-          Moves to Recycle Bin. Sidecar .xmp is also removed.
+          Moves to Recycle Bin. Legacy .xmp sidecar files are also removed.
         </div>
       </div>
     </aside>
   )
 }
 
-function Meta({ d }: { d: ImageDetails }) {
-  const rows: [string, string | number | null][] = [
-    ['Dimensions', d.width && d.height ? `${d.width} × ${d.height}` : null],
-    ['Size', formatBytes(d.sizeBytes)],
-    ['Taken', d.takenAt ? new Date(d.takenAt).toLocaleString() : null],
-    ['Modified', new Date(d.mtimeMs).toLocaleString()],
-    ['Camera',
-      [d.cameraMake, d.cameraModel].filter(Boolean).join(' ') || null],
-    ['Format', d.ext.toUpperCase()],
-    ['Metadata saved',
-      d.metaWrittenAt ? new Date(d.metaWrittenAt).toLocaleString() : 'never'],
-  ]
-  return (
-    <div className="mt-3 border-t border-surface-border pt-3">
-      <div className="text-[11px] uppercase tracking-wider text-slate-500 mb-1">
-        File info
+/**
+ * Inline hint under the tag editor explaining *where* the tags will be
+ * saved. Three distinct states, mirroring the backend `WriteMode` enum:
+ *   - `native`      – embedded by our own handler (XMP/iTXt/EXIF)
+ *   - `shell`       – written via Windows Shell property system
+ *   - `libraryOnly` – no writable path; stays in the Magpie index
+ */
+function WriteCapabilityHint({ d }: { d: ImageDetails }) {
+  const ext = d.ext.toUpperCase()
+  if (d.writeMode === 'native') {
+    return (
+      <div className="text-[11px] text-slate-500 mt-1">
+        Title and tags are embedded directly into the {ext} file (XMP).
+        Windows Explorer, Adobe Bridge and other XMP-aware tools will see
+        them.
       </div>
-      <dl className="grid grid-cols-[110px_1fr] gap-y-1 text-xs">
-        {rows.map(([k, v]) => (
-          <div key={k} className="contents">
-            <dt className="text-slate-500">{k}</dt>
-            <dd className="text-slate-300 truncate" title={String(v ?? '')}>
-              {v ?? <span className="text-slate-600">—</span>}
-            </dd>
-          </div>
-        ))}
-      </dl>
+    )
+  }
+  if (d.writeMode === 'shell') {
+    return (
+      <div className="text-[11px] text-slate-500 mt-1">
+        Title and tags are saved on the source file via the same Windows
+        property system that Explorer's <em>Properties → Details</em> tab
+        uses.
+      </div>
+    )
+  }
+  return (
+    <div className="text-[11px] text-amber-300/80 mt-1">
+      Windows has no property handler that can embed tags in {ext} files on
+      this system, so tags are stored in Magpie's library only.
     </div>
+  )
+}
+
+function ReadOnlyList({ d }: { d: ImageDetails }) {
+  const baseRows: [string, string | null][] = [
+    ['Filename', d.filename],
+    ['Path', d.path],
+    ['Size', formatBytes(d.sizeBytes)],
+    ['Format', d.ext.toUpperCase()],
+    ['Modified', new Date(d.mtimeMs).toLocaleString()],
+    [
+      'Metadata saved',
+      d.metaWrittenAt ? new Date(d.metaWrittenAt).toLocaleString() : 'never',
+    ],
+  ]
+  const techRows: [string, string | null][] = (d.technical ?? []).map(
+    ([k, v]) => [k, v],
+  )
+  const rows = [...baseRows, ...techRows]
+  return (
+    <dl className="grid grid-cols-[130px_1fr] gap-y-1 text-xs">
+      {rows.map(([k, v], i) => (
+        <div key={`${k}-${i}`} className="contents">
+          <dt className="text-slate-500">{k}</dt>
+          <dd className="text-slate-300 truncate" title={String(v ?? '')}>
+            {v ?? <span className="text-slate-600">—</span>}
+          </dd>
+        </div>
+      ))}
+    </dl>
   )
 }
 
@@ -296,8 +325,6 @@ function MultiDetails({ ids, onClose }: { ids: number[]; onClose: () => void }) 
   const clearSelection = useStore((s) => s.clearSelection)
   const [tagsAdd, setTagsAdd] = useState<string[]>([])
   const [tagsRemove, setTagsRemove] = useState<string[]>([])
-  // Refs mirror the state so applyTags.mutationFn sees the LATEST values even
-  // if the click handler fires in the same React batch as the input's onBlur.
   const tagsAddRef = useRef<string[]>([])
   const tagsRemoveRef = useRef<string[]>([])
   tagsAddRef.current = tagsAdd
@@ -308,17 +335,10 @@ function MultiDetails({ ids, onClose }: { ids: number[]; onClose: () => void }) 
     qc.invalidateQueries({ queryKey: ['images'] })
     qc.invalidateQueries({ queryKey: ['tags'] })
     qc.invalidateQueries({ queryKey: ['folders'] })
-    // Drop cached per-image details for anything we edited so that a later
-    // single-image selection refetches instead of showing stale values.
     for (const id of updatedIds) {
       qc.invalidateQueries({ queryKey: ['image', id] })
     }
   }
-
-  const setRating = useMutation({
-    mutationFn: (v: number | null) => batchUpdateMetadata(ids, { rating: v }),
-    onSuccess: (updatedIds) => invalidateAll(updatedIds ?? []),
-  })
 
   const applyTags = useMutation({
     mutationFn: async () => {
@@ -344,7 +364,7 @@ function MultiDetails({ ids, onClose }: { ids: number[]; onClose: () => void }) 
       setTagsAdd([])
       setTagsRemove([])
       invalidateAll(updatedIds ?? [])
-      setLastResult(n === 0 ? 'Nothing to save' : `Updated ${n} image${n === 1 ? '' : 's'}`)
+      setLastResult(n === 0 ? 'Nothing to save' : `Updated ${n} file${n === 1 ? '' : 's'}`)
       window.setTimeout(() => setLastResult(null), 2500)
     },
     onError: (err) => {
@@ -357,8 +377,8 @@ function MultiDetails({ ids, onClose }: { ids: number[]; onClose: () => void }) 
   const deleteMutation = useMutation({
     mutationFn: async () => {
       const yes = await confirm(
-        `Move ${ids.length} images to the Recycle Bin?\n\nYou can restore them from the Windows Recycle Bin afterwards.`,
-        { title: 'Delete images', kind: 'warning', okLabel: 'Move to Recycle Bin', cancelLabel: 'Cancel' },
+        `Move ${ids.length} files to the Recycle Bin?\n\nYou can restore them from the Windows Recycle Bin afterwards.`,
+        { title: 'Delete files', kind: 'warning', okLabel: 'Move to Recycle Bin', cancelLabel: 'Cancel' },
       )
       if (!yes) return null
       return deleteImages(ids)
@@ -380,29 +400,19 @@ function MultiDetails({ ids, onClose }: { ids: number[]; onClose: () => void }) 
 
   return (
     <aside className="border-l border-surface-border p-4 h-full min-h-0 overflow-y-auto">
-      <TitleBar label={`${ids.length} images selected`} onClose={onClose} />
+      <TitleBar label={`${ids.length} files selected`} onClose={onClose} />
 
-      <Field label="Set rating">
-        <StarRating value={null} onChange={(v) => setRating.mutate(v)} />
-        <div className="text-[11px] text-slate-500 mt-1">
-          Click a star to apply to all selected images.
-        </div>
-      </Field>
-
-      <Field label="Add tags">
+      <Section label="Add tags">
         <TagInput
           tags={tagsAdd}
           onChange={(next) => {
-            // Also imperatively update the ref so that if the user's click
-            // on Apply is batched with this onChange (triggered by input
-            // blur), the mutation still sees the newly-committed tag.
             tagsAddRef.current = next
             setTagsAdd(next)
           }}
         />
-      </Field>
+      </Section>
 
-      <Field label="Remove tags">
+      <Section label="Remove tags">
         <TagInput
           tags={tagsRemove}
           onChange={(next) => {
@@ -410,7 +420,7 @@ function MultiDetails({ ids, onClose }: { ids: number[]; onClose: () => void }) 
             setTagsRemove(next)
           }}
         />
-      </Field>
+      </Section>
 
       <button
         className="btn-primary mt-2"
@@ -421,8 +431,8 @@ function MultiDetails({ ids, onClose }: { ids: number[]; onClose: () => void }) 
         onClick={() => applyTags.mutate()}
       >
         {applyTags.isPending
-          ? `Saving ${ids.length} images…`
-          : `Apply tag changes to ${ids.length} images`}
+          ? `Saving ${ids.length} files…`
+          : `Apply tag changes to ${ids.length} files`}
       </button>
       {lastResult && (
         <div
@@ -443,17 +453,17 @@ function MultiDetails({ ids, onClose }: { ids: number[]; onClose: () => void }) 
           disabled={deleteMutation.isPending}
         >
           <TrashIcon />
-          {deleteMutation.isPending ? 'Deleting…' : `Delete ${ids.length} images`}
+          {deleteMutation.isPending ? 'Deleting…' : `Delete ${ids.length} files`}
         </button>
         <div className="text-[11px] text-slate-500 mt-1 text-center">
-          Moves files to Recycle Bin. Sidecar .xmp files are also removed.
+          Moves files to Recycle Bin. Legacy .xmp sidecar files are also removed.
         </div>
       </div>
     </aside>
   )
 }
 
-function Field({
+function Section({
   label,
   children,
 }: {
@@ -461,8 +471,8 @@ function Field({
   children: React.ReactNode
 }) {
   return (
-    <div className="mb-3">
-      <div className="text-[11px] uppercase tracking-wider text-slate-500 mb-1">
+    <div className="mb-4 pb-3 border-b border-surface-border last:border-b-0 last:pb-0 last:mb-3">
+      <div className="text-[11px] uppercase tracking-wider text-slate-500 mb-1.5">
         {label}
       </div>
       {children}
@@ -475,6 +485,16 @@ function formatBytes(n: number) {
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
   if (n < 1024 * 1024 * 1024) return `${(n / 1024 / 1024).toFixed(1)} MB`
   return `${(n / 1024 / 1024 / 1024).toFixed(2)} GB`
+}
+
+/**
+ * Extensions we can render inline via the OS's decoder (Tauri's asset://
+ * protocol serves the raw file to <img>, so this is really "extensions
+ * modern browsers can decode"). Everything else gets a placeholder tile.
+ */
+function isImagePreviewable(ext: string): boolean {
+  const e = ext.toLowerCase().replace(/^\./, '')
+  return ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp', 'svg', 'avif'].includes(e)
 }
 
 function TrashIcon() {

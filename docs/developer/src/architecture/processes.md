@@ -49,7 +49,7 @@ lock is released quickly.
 ## Async model
 
 - `async fn` at the Tauri command boundary is idiomatic. It lets us
-  `await` a background thumbnail generation or a sidecar write
+  `await` a background thumbnail generation or a metadata write
   without blocking a Tokio worker.
 - Inside a command, DB operations are synchronous (they take a
   `MutexGuard`). This is deliberate: SQLite calls are fast enough to
@@ -66,9 +66,10 @@ lock is released quickly.
   IDs so partial progress is durable even if the user closes the
   window.
 - On close, Tauri drops the main window; pending `spawn_blocking`
-  tasks are given a grace period to finish. Any in-flight sidecar
-  write is atomic (write-to-temp + rename), so worst case a temp
-  file is left behind and cleaned up on the next successful write.
+  tasks are given a grace period to finish. Any in-flight metadata
+  write is atomic (write-to-temp + rename inside the source image),
+  so worst case a `.write-tmp` file is left behind and cleaned up
+  on the next successful write.
 
 ## Frontend concurrency
 

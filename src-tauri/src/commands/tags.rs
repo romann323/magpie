@@ -1,6 +1,6 @@
 use crate::core::AppServices;
 use crate::db::queries;
-use crate::error::PicOrgResult;
+use crate::error::AppResult;
 use crate::types::TagStats;
 use std::sync::Arc;
 use tauri::State;
@@ -9,7 +9,7 @@ use tauri::State;
 pub async fn list_tags(
     services: State<'_, Arc<AppServices>>,
     prefix: Option<String>,
-) -> PicOrgResult<Vec<TagStats>> {
+) -> AppResult<Vec<TagStats>> {
     queries::list_tags(&services.db, prefix.as_deref())
 }
 
@@ -18,7 +18,7 @@ pub async fn rename_tag(
     services: State<'_, Arc<AppServices>>,
     old_name: String,
     new_name: String,
-) -> PicOrgResult<()> {
+) -> AppResult<()> {
     queries::rename_tag(&services.db, &old_name, &new_name)
 }
 
@@ -26,6 +26,6 @@ pub async fn rename_tag(
 pub async fn delete_tag(
     services: State<'_, Arc<AppServices>>,
     name: String,
-) -> PicOrgResult<()> {
+) -> AppResult<()> {
     queries::delete_tag(&services.db, &name)
 }

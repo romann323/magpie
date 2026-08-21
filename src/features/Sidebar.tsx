@@ -90,17 +90,6 @@ export function Sidebar() {
         ))}
       </SidebarSection>
 
-      <SidebarSection title="Rating">
-        {[5, 4, 3, 2, 1].map((r) => (
-          <SidebarItem
-            key={r}
-            label={<Stars count={r} />}
-            active={view.kind === 'rating' && view.min === r}
-            onClick={() => setView({ kind: 'rating', min: r })}
-          />
-        ))}
-      </SidebarSection>
-
       <SidebarSection title="Tags">
         {(tags.data?.length ?? 0) === 0 && (
           <div className="text-xs text-slate-500 px-2 py-1">No tags yet.</div>
@@ -163,16 +152,6 @@ function folderLabel(path: string): string {
   const norm = path.replace(/\\/g, '/')
   const parts = norm.split('/').filter(Boolean)
   return parts.at(-1) ?? path
-}
-
-function Stars({ count }: { count: number }) {
-  return (
-    <span className="text-star">
-      {'★'.repeat(count)}
-      <span className="text-slate-600">{'★'.repeat(5 - count)}</span>
-      <span className="text-slate-500 text-xs"> and up</span>
-    </span>
-  )
 }
 
 function TrashIcon() {

@@ -7,8 +7,8 @@
        so mdBook picks them up as `additional-css` / `additional-js`.
     2. Runs `mdbook build` for docs/user-manual and docs/developer.
     3. Uses headless Microsoft Edge to render each book's print.html
-       to a PDF at docs/picorg-user-manual.pdf and
-       docs/picorg-developer-guide.pdf.
+       to a PDF at docs/magpie-user-manual.pdf and
+       docs/magpie-developer-guide.pdf.
 
 .PARAMETER Serve
     After building, serve docs/ on http://localhost:8000 so you can
@@ -94,7 +94,7 @@ function Convert-BookToPdf {
 
     # Use a per-render user-data-dir so parallel/repeated invocations
     # do not step on a running Edge profile.
-    $userDataDir = Join-Path $env:TEMP ("picorg-pdf-" + [guid]::NewGuid().ToString('N'))
+    $userDataDir = Join-Path $env:TEMP ("magpie-pdf-" + [guid]::NewGuid().ToString('N'))
 
     $argList = @(
         '--headless=new',
@@ -109,8 +109,8 @@ function Convert-BookToPdf {
 
     # Start-Process handles stderr chatter gracefully. Edge exits ~0 once
     # the print job is written. We give it up to 60s.
-    $stdoutLog = Join-Path $env:TEMP ("picorg-pdf-out-" + [guid]::NewGuid().ToString('N') + '.log')
-    $stderrLog = Join-Path $env:TEMP ("picorg-pdf-err-" + [guid]::NewGuid().ToString('N') + '.log')
+    $stdoutLog = Join-Path $env:TEMP ("magpie-pdf-out-" + [guid]::NewGuid().ToString('N') + '.log')
+    $stderrLog = Join-Path $env:TEMP ("magpie-pdf-err-" + [guid]::NewGuid().ToString('N') + '.log')
     $proc = Start-Process -FilePath $browser -ArgumentList $argList `
         -RedirectStandardOutput $stdoutLog -RedirectStandardError $stderrLog `
         -NoNewWindow -PassThru
@@ -130,13 +130,13 @@ function Convert-BookToPdf {
 
 Convert-BookToPdf `
     -BookRoot (Join-Path $docsRoot 'user-manual') `
-    -PdfOut  (Join-Path $docsRoot 'picorg-user-manual.pdf') `
-    -Title   'PicOrg User Manual'
+    -PdfOut  (Join-Path $docsRoot 'magpie-user-manual.pdf') `
+    -Title   'Magpie User Manual'
 
 Convert-BookToPdf `
     -BookRoot (Join-Path $docsRoot 'developer') `
-    -PdfOut  (Join-Path $docsRoot 'picorg-developer-guide.pdf') `
-    -Title   'PicOrg Developer Guide'
+    -PdfOut  (Join-Path $docsRoot 'magpie-developer-guide.pdf') `
+    -Title   'Magpie Developer Guide'
 
 Write-Host ""
 Write-Host "Done. Open docs\index.html to view."

@@ -4,7 +4,6 @@ import type { ImageFilter, ImageSort } from './types'
 type View =
   | { kind: 'all' }
   | { kind: 'folder'; id: number }
-  | { kind: 'rating'; min: number }
   | { kind: 'tag'; name: string }
   | { kind: 'smart'; id: number }
 
@@ -78,9 +77,6 @@ export function filterFromView(v: View, extra: ImageFilter, search: string): Ima
       return f
     case 'folder':
       f.folderIds = [v.id]
-      return f
-    case 'rating':
-      f.ratingMin = v.min
       return f
     case 'tag':
       f.tagsAll = [...(f.tagsAll ?? []), v.name]

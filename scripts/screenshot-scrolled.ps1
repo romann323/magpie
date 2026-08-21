@@ -1,6 +1,6 @@
 param(
-    [string]$Exe = "src-tauri\target\release\picorg.exe",
-    [string]$Out = "screenshots\picorg-delete-button.png",
+    [string]$Exe = "src-tauri\target\release\desktop.exe",
+    [string]$Out = "screenshots\magpie-delete-button.png",
     [int]$WaitSeconds = 8
 )
 
@@ -59,13 +59,13 @@ $cb = [Win2+EnumWindowsProc] {
     $title = $sb.ToString()
     $ownerPid = 0
     [Win2]::GetWindowThreadProcessId($h, [ref]$ownerPid) | Out-Null
-    if ($title -eq "PicOrg" -and $ownerPid -ne 0) {
+    if ($title -eq "Magpie" -and $ownerPid -ne 0) {
         $script:found += [pscustomobject]@{ Hwnd = $h; OwnerPid = $ownerPid }
     }
     return $true
 }
 [Win2]::EnumWindows($cb, [IntPtr]::Zero) | Out-Null
-if ($found.Count -eq 0) { throw "No PicOrg window" }
+if ($found.Count -eq 0) { throw "No Magpie window" }
 $hwnd = $found[0].Hwnd
 
 $r = New-Object Win2+Rect

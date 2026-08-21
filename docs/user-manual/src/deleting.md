@@ -1,65 +1,75 @@
-# Deleting photos
+# Deleting files
 
-PicOrg has one deletion path with two safety layers: an explicit
-confirmation prompt, and Recycle-Bin-by-default (so mistakes are
-recoverable).
+Sooner or later you'll want to get rid of some files — blurry shots,
+duplicates, an old draft PDF, that photo of a light switch from
+someone's pocket. Magpie deletes them safely, with a confirmation,
+and puts them in the **Recycle Bin** so you can undo the deletion if
+you change your mind.
 
-## Deleting a single photo
+## Deleting one file
 
-Select the photo, then either:
+1. Click the file in the grid.
+2. Either:
+   - Click the red **Delete file** button at the bottom of the
+     details panel, **or**
+   - Press the **Delete** key on your keyboard.
+3. A prompt asks: *"Move IMG_2043.jpg to the Recycle Bin?"*.
+4. Click **Move to Recycle Bin** to confirm — or **Cancel** to back
+   out.
 
-- Click the red **Delete image** button at the bottom of the details
-  panel, or
-- Press <kbd>Delete</kbd> on the keyboard.
+The file disappears from Magpie and lands in the Windows Recycle
+Bin.
 
-A confirmation dialog appears:
+## Deleting many files at once
 
-> Move "IMG_2043.jpg" to the Recycle Bin?
-> You can restore it from the Windows Recycle Bin afterwards.
+1. Pick lots of files with **Ctrl + click** or **Shift + click**.
+2. Click **Delete N files** at the bottom of the details panel (or
+   press the **Delete** key).
+3. Confirm the prompt.
 
-Click **Move to Recycle Bin** to proceed, or **Cancel** to back out.
+## What actually happens when you delete
 
-## Deleting many photos
+- The file is moved to the **Windows Recycle Bin** — the same
+  Recycle Bin you already know.
+- Any tags Magpie had for that file go with it.
+- Any leftover `.xmp` sidecar next to the file is deleted too.
+- Magpie forgets the file (until you restore it — see below).
 
-Multi-select as usual (Ctrl+click, Shift+click) and click **Delete N
-images** at the bottom of the details panel. The confirmation dialog
-reads *"Move N images to the Recycle Bin?"*.
+**Nothing is deleted permanently** — unless you tell it to (see the
+next section).
 
-## What PicOrg actually does
+## Getting a file back after deleting
 
-On confirmation, for every selected photo, PicOrg:
+Made a mistake? No problem:
 
-1. Moves the source file to the **Windows Recycle Bin** using the
-   OS API (the same code path Explorer uses).
-2. Moves the sidecar `.xmp` file (if any) to the Recycle Bin too.
-3. Removes the photo from the library database.
-4. Deletes any cached thumbnails.
+1. Double-click the **Recycle Bin** on your desktop.
+2. Find your file.
+3. Right-click it → **Restore**.
 
-If a step fails (e.g. Windows refuses to move a locked file), PicOrg
-does *not* remove the photo from the index — better to have a dead
-row you can retry than lose track of a real file.
+The file goes back exactly where it was. The next time you click
+**Rescan** in Magpie, it re-appears in the library with its tags and
+title still on it.
 
-## Recovering a deleted photo
+## Permanently deleting (no safety net)
 
-Open the Windows Recycle Bin, right-click the file, choose **Restore**.
-It goes back where it was. On the next PicOrg **Rescan** the photo
-reappears in the library with the same tags, rating, and title it had
-before (they were preserved in the sidecar).
+If you're absolutely sure a file is gone-for-good, hold the
+**Shift** key while pressing Delete (or while clicking the delete
+button). The prompt will say *"Permanently delete"* instead of
+*"Move to Recycle Bin"*.
 
-## Permanently deleting
+> **Warning.** Permanent deletion cannot be undone. Do not use it
+> unless you're 100% sure — and always keep a backup of important
+> files.
 
-If you're absolutely sure, hold <kbd>Shift</kbd> when clicking Delete
-(or Shift+Delete on the keyboard). PicOrg then bypasses the Recycle
-Bin and deletes the file directly. The confirmation prompt is worded
-differently in that mode so you know you're skipping the safety net.
+If in doubt, use the normal delete. You can always empty the Recycle
+Bin later.
 
-> **Warning.** Shift-delete cannot be undone. If in doubt, use the
-> normal delete and empty the Recycle Bin later.
+## What is *not* deleted
 
-## What is NOT deleted
-
-- Photos in **library folders you removed** are not touched — removing
-  a library folder only removes the index entries.
-- Tags "belong to the library"; even if you delete every photo that
-  had a tag, the tag itself lingers in the sidebar with a count of 0
-  until you right-click it → Delete tag.
+- **Removing a folder from Magpie is not deleting.** The files stay
+  on your computer.
+- **Un-tagging is not deleting.** Removing every tag from a file
+  just leaves it un-tagged.
+- **A tag that no file uses any more** doesn't get deleted
+  automatically. You can right-click it in the sidebar and choose
+  **Delete tag** to clean it up.

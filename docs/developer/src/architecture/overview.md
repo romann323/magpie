@@ -4,7 +4,7 @@
 
 ```
    ┌───────────────────────────────────────────────────────────┐
-   │                    PicOrg process                         │
+   │                    Magpie process                         │
    │                                                           │
    │   ┌──────────────────┐         ┌─────────────────────┐    │
    │   │  Renderer        │  IPC    │  Rust core           │   │
@@ -18,7 +18,7 @@
                        ▼                                         ▼
                 ┌─────────────┐                           ┌─────────────┐
                 │  SQLite DB  │                           │  Filesystem │
-                │ picorg.db   │                           │ Your photos │
+                │ library.db   │                           │ Your photos │
                 └─────────────┘                           └─────────────┘
                 (index only)                       (source of truth for
                                                     photos + XMP)
@@ -30,8 +30,11 @@ Two big ideas:
    metadata I/O, DB queries, thumbnails — lives in Rust. The
    renderer's job is to invoke commands and render their results.
 2. **The filesystem is the source of truth for user data.** The
-   SQLite database is a cache/index; wiping it never loses user data,
-   because tags/ratings/titles live in sidecar and embedded XMP.
+   SQLite database is a cache/index; wiping it never loses user
+   data — for the writable formats (JPEG/PNG/WebP/GIF) tags and
+   titles live in the embedded XMP inside each source file; for the
+   read-only formats they live in the DB and would need to be
+   re-entered after a wipe.
 
 ## Sub-systems
 
@@ -63,28 +66,44 @@ supported extensions, and for each file:
 1. Stat + skip if `mtime_ms` unchanged.
 2. Hash content (`XXH3`).
 3. Extract EXIF (taken time, dimensions, camera).
-4. Extract XMP from embedded or sidecar.
+4. Extract XMP from embedded chunks (JPEG APP1 / PNG iTXt) and, if
+   present, any legacy `.xmp` sidecar for backward compatibility.
 5. Upsert into `images` + `image_tags`.
 6. Enqueue thumbnail generation.
 
-Progress events flow to the frontend via `picorg://scan`.
+Progress events flow to the frontend via `app://scan`.
 
 ### Thumbnail pipeline (`src-tauri/src/core/thumbnail.rs`)
 
 Decode → resize with `fast_image_resize` (SIMD) → encode WebP → write
-to `%APPDATA%\com.picorg.picorg\thumbs\<id>-<size>.webp`. Two sizes
+to `%APPDATA%\com.magpie.app\thumbs\<id>-<size>.webp`. Two sizes
 per photo (small ~256 px, medium ~512 px).
 
-### Metadata (`src-tauri/src/core/metadata/`)
+### Metadata (`src-tauri/src/core/metadata/` + `src-tauri/src/core/formats/`)
 
-- `read.rs` — orchestrates EXIF + XMP reading, applying sidecar over
-  embedded when both exist.
-- `xmp.rs` — a hand-written streaming XMP reader/writer supporting
-  the subset PicOrg cares about (title, description, rating,
-  subjects, MicrosoftPhoto keywords). Also owns the JPEG APP1 XMP
-  injector.
-- `write.rs` — atomically writes sidecar and, when possible, embeds
-  the same packet into the source file.
+- `metadata/read.rs` — a thin façade that asks the format registry
+  for the right handler and then folds in any legacy sidecar so
+  users migrating from Lightroom / old Magpie don't lose data.
+- `metadata/write.rs` — asks the registry for the handler, calls
+  its atomic writer, and cleans up any legacy `.xmp`.
+- `metadata/sidecar.rs` — computes the legacy sidecar path (read
+  + cleanup only; Magpie never writes new sidecars).
+- `formats/mod.rs` — declares the `FormatHandler` trait and the
+  `FormatRegistry` that owns one instance per supported extension.
+- `formats/xmp_packet.rs` — a hand-written streaming XMP
+  reader/writer supporting the subset Magpie cares about (title,
+  description, rating, subjects, MicrosoftPhoto keywords). The
+  description and rating fields are preserved on read-modify-write
+  even though Magpie's UI doesn't surface them.
+- `formats/{jpeg,png,webp,gif}.rs` — writable handlers for the
+  four image formats that have a safe embed path today.
+- `formats/tiff.rs` and `formats/stubs.rs` — read-only handlers
+  for TIFF, HEIC, PDF, video, and camera RAW.
+
+See [File formats](../design/file-formats.md) for the full
+handler catalogue and
+[Adding a format handler](../design/adding-a-format-handler.md) for
+the plug-in recipe.
 
 ### Command surface (`src-tauri/src/commands/`)
 
@@ -121,9 +140,11 @@ Selecting a photo and typing a title, end to end:
 7. User types in the Title input. `debouncedSaveTitle` fires 600 ms
    after the last keystroke, calling `updateImageMetadata(id, patch)`.
 8. Rust's `update_image_metadata` runs `apply_metadata_patch`
-   (transactional), then `merge_and_write_sidecar` (blocking,
-   awaited), then `set_meta_written_at` + `set_meta_read_at_now`, and
-   finally emits `picorg://image-updated`.
+   (transactional), then `write_metadata_to_source` (blocking,
+   awaited — embeds the merged XMP into the source file and cleans
+   up any legacy sidecar), then `set_meta_written_at` +
+   `set_meta_read_at_now`, and finally emits
+   `app://image-updated`.
 9. Frontend's `qc.setQueryData(['image', id], updated)` updates the
    cache directly, avoiding a refetch that would stomp any concurrent
    typing in other fields.

@@ -1,7 +1,7 @@
 pub mod migrations;
 pub mod queries;
 
-use crate::error::{PicOrgError, PicOrgResult};
+use crate::error::{AppError, AppResult};
 use rusqlite::Connection;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -17,7 +17,7 @@ pub struct Db {
 }
 
 impl Db {
-    pub fn open(path: &Path) -> PicOrgResult<Self> {
+    pub fn open(path: &Path) -> AppResult<Self> {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
         }
@@ -37,22 +37,22 @@ impl Db {
         })
     }
 
-    pub fn with_conn<T>(&self, f: impl FnOnce(&Connection) -> PicOrgResult<T>) -> PicOrgResult<T> {
+    pub fn with_conn<T>(&self, f: impl FnOnce(&Connection) -> AppResult<T>) -> AppResult<T> {
         let guard = self
             .inner
             .lock()
-            .map_err(|_| PicOrgError::Pool("db mutex poisoned".into()))?;
+            .map_err(|_| AppError::Pool("db mutex poisoned".into()))?;
         f(&guard)
     }
 
     pub fn with_conn_mut<T>(
         &self,
-        f: impl FnOnce(&mut Connection) -> PicOrgResult<T>,
-    ) -> PicOrgResult<T> {
+        f: impl FnOnce(&mut Connection) -> AppResult<T>,
+    ) -> AppResult<T> {
         let mut guard = self
             .inner
             .lock()
-            .map_err(|_| PicOrgError::Pool("db mutex poisoned".into()))?;
+            .map_err(|_| AppError::Pool("db mutex poisoned".into()))?;
         f(&mut guard)
     }
 }

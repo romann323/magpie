@@ -3,6 +3,8 @@ import { open } from '@tauri-apps/plugin-dialog'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { addLibraryFolder, rescanAll } from '../ipc'
 import { useStore } from '../store'
+import { PRODUCT_NAME } from '../brand'
+import { AppIcon } from '../components/AppIcon'
 import type { ImageSort, SortBy, SortDir } from '../types'
 
 export function TopBar() {
@@ -51,10 +53,8 @@ export function TopBar() {
   return (
     <header className="h-12 border-b border-surface-border flex items-center gap-3 px-3 select-none">
       <div className="flex items-center gap-2 pr-3 border-r border-surface-border">
-        <div className="w-6 h-6 rounded bg-accent grid place-items-center text-white text-xs font-bold">
-          P
-        </div>
-        <span className="font-semibold tracking-tight">PicOrg</span>
+        <AppIcon className="w-6 h-6 rounded shrink-0" />
+        <span className="font-semibold tracking-tight">{PRODUCT_NAME}</span>
       </div>
 
       <button
@@ -79,7 +79,7 @@ export function TopBar() {
         <input
           type="search"
           className="input"
-          placeholder="Search title, comment, filename, tags…"
+          placeholder="Search title, filename, tags…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -97,7 +97,6 @@ export function TopBar() {
         >
           <option value="takenAt">Taken</option>
           <option value="filename">Filename</option>
-          <option value="rating">Rating</option>
           <option value="addedAt">Added</option>
           <option value="size">Size</option>
         </select>

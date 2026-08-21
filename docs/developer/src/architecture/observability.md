@@ -2,27 +2,27 @@
 
 ## File-based logging
 
-Every run of PicOrg produces a rolling log file at:
+Every run of Magpie produces a rolling log file at:
 
 ```
-%APPDATA%\com.picorg.picorg\logs\picorg.log
+%APPDATA%\com.magpie.app\logs\app.log
 ```
 
 The logger is initialised in `src-tauri/src/lib.rs::init_logging`,
 using `tracing-subscriber` with a plain-text formatter and a
-`RUST_LOG`-compatible env filter (default: `info,picorg_lib=info`).
+`RUST_LOG`-compatible env filter (default: `info,desktop_lib=info`).
 
 Format of a typical line:
 
 ```
-2026-08-17T18:53:12.331332Z  INFO picorg_lib: PicOrg started app_data_dir="…"
-2026-08-17T19:22:14.029142Z  INFO picorg_lib::commands::images: get_image: resynced user metadata from FS id=5
-2026-08-18T08:41:03.912483Z  INFO picorg_lib::commands::images: batch_update_metadata count=3 patch=…
+2026-08-17T18:53:12.331332Z  INFO desktop_lib: Magpie started app_data_dir="…"
+2026-08-17T19:22:14.029142Z  INFO desktop_lib::commands::images: get_image: resynced user metadata from FS id=5
+2026-08-18T08:41:03.912483Z  INFO desktop_lib::commands::images: batch_update_metadata count=3 patch=…
 ```
 
 - ISO-8601 timestamp with microsecond precision.
 - Log level: `TRACE / DEBUG / INFO / WARN / ERROR`.
-- Target: usually the module path (`picorg_lib::commands::images`).
+- Target: usually the module path (`desktop_lib::commands::images`).
 - Structured fields on the tail: `id=5`, `count=3`, `?patch`.
 
 ## Structured fields
@@ -34,7 +34,7 @@ tracing::info!(
     id,
     ?patch,                       // Debug-formatted
     op = "update_image_metadata", // static label
-    "metadata + sidecar saved"
+    "metadata embedded in source file"
 );
 ```
 
@@ -62,7 +62,7 @@ marker, which makes them easy to filter:
 ```
 
 This lets us reason about the full IPC round-trip from a single
-tail of `picorg.log`.
+tail of `app.log`.
 
 ## What's logged where
 
@@ -72,8 +72,9 @@ tail of `picorg.log`.
 | Migration applied                              | INFO   | `db/migrations.rs::run`                                          |
 | Command entry (`update_image_metadata`, …)     | INFO   | Each Tauri command that mutates state                            |
 | `get_image` FS-refresh triggered               | INFO   | `commands/images.rs::get_image`                                  |
-| Sidecar write failed                           | WARN   | `commands/images.rs::apply_patch_and_write_sidecar`              |
-| Embedded XMP write failed                      | WARN   | `core/metadata/write.rs`                                         |
+| Embedded XMP write failed                      | WARN   | `commands/images.rs::apply_patch_and_persist`                    |
+| Unsupported format for embed                   | WARN   | `core/metadata/write.rs::write_metadata_to_source`               |
+| Legacy sidecar cleanup failed                  | WARN   | `core/metadata/write.rs::write_metadata_to_source`               |
 | Scan errors (unreadable file, permission)      | WARN   | `core/scanner.rs`                                                |
 | DB migration or startup errors                 | ERROR  | `db/mod.rs`, `lib.rs::run`                                       |
 | Frontend applyTags dispatch                    | INFO   | `features/DetailsPanel.tsx::MultiDetails.applyTags`              |
@@ -90,8 +91,8 @@ with daily rotation or size-based (e.g. 10 MB × 5).
 Set the `RUST_LOG` environment variable before launching:
 
 ```powershell
-$env:RUST_LOG = "debug,picorg_lib=trace"
-& "$env:LOCALAPPDATA\Programs\picorg\picorg.exe"
+$env:RUST_LOG = "debug,desktop_lib=trace"
+& "$env:LOCALAPPDATA\Programs\Magpie\desktop.exe"
 ```
 
 This will produce a torrent of scanner-level detail, useful when
@@ -100,5 +101,5 @@ debugging a bad scan on a specific folder.
 ## No telemetry
 
 There is no automatic upload of the log, no crash reporter, no
-analytics. `picorg.log` is on your disk and stays there unless you
+analytics. `app.log` is on your disk and stays there unless you
 explicitly share it (e.g. attach it to a bug report).

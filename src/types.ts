@@ -21,26 +21,44 @@ export type ImageSummary = {
   mtimeMs: number
   takenAt: number | null
   title: string | null
-  rating: number | null
   contentHash: string | null
 }
 
+/**
+ * `technical` is an ordered list of `[label, value]` pairs contributed by the
+ * format handler for the current file (dimensions, EXIF, camera, duration, …).
+ * The list is display-ready; UI just prints it verbatim.
+ *
+ * `formatHandler` is the human-readable handler name (e.g. `"JPEG (XMP APP1)"`)
+ * and `canWriteTags` reports whether the handler supports embedding user tags
+ * into the source file.
+ */
+/** How Magpie will persist title / tags for a given file. */
+export type WriteMode =
+  /** Format handler embeds directly (JPEG XMP, PNG iTXt, WebP, GIF89a, ...). */
+  | 'native'
+  /** Windows Shell property system (RAW, MP4/MOV, HEIC, TIFF, ...). */
+  | 'shell'
+  /** No writable path: metadata lives in the Magpie library only. */
+  | 'libraryOnly'
+
 export type ImageDetails = ImageSummary & {
-  comment: string | null
   tags: string[]
   cameraMake: string | null
   cameraModel: string | null
   metaWrittenAt: number | null
   metaReadAt: number | null
+  technical: Array<[string, string]>
+  formatHandler: string
+  canWriteTags: boolean
+  writeMode: WriteMode
 }
 
-export type SortBy = 'takenAt' | 'filename' | 'rating' | 'addedAt' | 'size'
+export type SortBy = 'takenAt' | 'filename' | 'addedAt' | 'size'
 export type SortDir = 'asc' | 'desc'
 
 export type ImageFilter = {
   folderIds?: number[]
-  ratingMin?: number
-  ratingMax?: number
   tagsAny?: string[]
   tagsAll?: string[]
   tagsNone?: string[]
@@ -49,7 +67,6 @@ export type ImageFilter = {
   ext?: string[]
   fts?: string
   hasTitle?: boolean
-  hasComment?: boolean
 }
 
 export type ImageSort = { by: SortBy; dir: SortDir }
@@ -69,8 +86,6 @@ export type MetadataPatch = {
   // - null       → clear the field
   // - value      → set the field
   title?: string | null
-  rating?: number | null
-  comment?: string | null
   tags?: string[]
   tagsAdd?: string[]
   tagsRemove?: string[]
@@ -114,7 +129,7 @@ export type DeleteResult = {
 
 export type ThumbSize = 'small' | 'medium' | 'large'
 
-export type PicOrgError = {
+export type AppError = {
   code: string
   message: string
 }

@@ -17,20 +17,18 @@ to its Tauri command and to the frontend component that drives it.
 
 | Feature                        | Command                          | Frontend component            |
 | ------------------------------ | -------------------------------- | ----------------------------- |
-| Paged image listing            | `query_images`                   | `ImageGrid`                   |
-| Sort by taken/modified/…       | `query_images` (`sort` arg)      | `TopBar`                      |
-| Filter by folder / rating / tag| `query_images` (`filter` arg)    | `Sidebar` filters             |
+| Paged file listing             | `query_images`                   | `ImageGrid`                   |
+| Sort by taken/added/…          | `query_images` (`sort` arg)      | `TopBar`                      |
+| Filter by folder / tag         | `query_images` (`filter` arg)    | `Sidebar` filters             |
 | Full-text search               | `query_images` (`filter.search`) | `TopBar` search box           |
 
 ## Editing
 
 | Feature                        | Command                          | Frontend component            |
 | ------------------------------ | -------------------------------- | ----------------------------- |
-| Fetch a photo's details        | `get_image`                      | `DetailsPanel/SingleDetails`  |
-| Auto-save title / comment      | `update_image_metadata`          | `DetailsPanel/SingleDetails`  |
-| Set rating                     | `update_image_metadata`          | `StarRating`                  |
-| Add / remove tag on one photo  | `update_image_metadata`          | `TagInput`                    |
-| Bulk set rating                | `batch_update_metadata`          | `DetailsPanel/MultiDetails`   |
+| Fetch a file's details         | `get_image`                      | `DetailsPanel/SingleDetails`  |
+| Auto-save title                | `update_image_metadata`          | `DetailsPanel/SingleDetails`  |
+| Add / remove tag on one file   | `update_image_metadata`          | `TagInput`                    |
 | Bulk add / remove tags         | `batch_update_metadata`          | `DetailsPanel/MultiDetails`   |
 
 ## Tag maintenance

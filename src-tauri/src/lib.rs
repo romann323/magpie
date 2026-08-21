@@ -1,10 +1,13 @@
+pub mod brand;
 pub mod commands;
 pub mod core;
 pub mod db;
 pub mod error;
+pub mod paths;
 pub mod types;
 
 use crate::core::AppServices;
+use std::path::Path;
 use std::sync::{Arc, Mutex};
 use tauri::Manager;
 
@@ -37,15 +40,10 @@ impl std::io::Write for FileLine {
     }
 }
 
-fn init_logging() {
-    // Log to %APPDATA%\com.picorg.picorg\logs\picorg.log so we can diagnose
-    // release builds (Windows GUI apps have no console).
-    let log_dir = dirs::data_dir()
-        .unwrap_or_else(std::env::temp_dir)
-        .join("com.picorg.picorg")
-        .join("logs");
+fn init_logging(app_data_dir: &Path) {
+    let log_dir = app_data_dir.join("logs");
     let _ = std::fs::create_dir_all(&log_dir);
-    let log_path = log_dir.join("picorg.log");
+    let log_path = log_dir.join(paths::LOG_FILE_NAME);
 
     let file_writer_opt = std::fs::OpenOptions::new()
         .create(true)
@@ -55,7 +53,7 @@ fn init_logging() {
         .map(|f| SharedFileWriter(Arc::new(Mutex::new(f))));
 
     let filter = tracing_subscriber::EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info,picorg_lib=debug"));
+        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info,desktop_lib=debug"));
 
     match file_writer_opt {
         Some(fw) => {
@@ -75,8 +73,6 @@ fn init_logging() {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    init_logging();
-
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
@@ -84,14 +80,17 @@ pub fn run() {
             let app_data_dir = app
                 .path()
                 .app_data_dir()
-                .unwrap_or_else(|_| std::env::temp_dir().join("PicOrg"));
+                .unwrap_or_else(|_| std::env::temp_dir().join("desktop-app-data"));
+
+            init_logging(&app_data_dir);
 
             let services = AppServices::new(app_data_dir)
-                .expect("failed to initialize PicOrg services");
+                .expect("failed to initialize application services");
 
             tracing::info!(
                 app_data_dir = ?services.app_data_dir,
-                "PicOrg started"
+                product = brand::PRODUCT_NAME,
+                "application started"
             );
 
             app.manage(services);
@@ -119,5 +118,5 @@ pub fn run() {
             commands::diag::log_frontend,
         ])
         .run(tauri::generate_context!())
-        .expect("error while running PicOrg");
+        .expect("error while running application");
 }

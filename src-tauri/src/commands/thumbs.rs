@@ -1,7 +1,7 @@
 use crate::core::thumbnail;
 use crate::core::AppServices;
 use crate::db::queries;
-use crate::error::{PicOrgError, PicOrgResult};
+use crate::error::{AppError, AppResult};
 use crate::types::ThumbSize;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -14,9 +14,9 @@ pub async fn get_thumb_path(
     services: State<'_, Arc<AppServices>>,
     id: i64,
     size: Option<ThumbSize>,
-) -> PicOrgResult<String> {
+) -> AppResult<String> {
     let size = size.unwrap_or(ThumbSize::Small);
-    let details = queries::get_image(&services.db, id)?;
+    let details = queries::get_image_row(&services.db, id)?;
     let source = PathBuf::from(&details.summary.path);
 
     let path = thumbnail::thumb_path(&services.thumb_cache_dir, id, size);
@@ -29,7 +29,7 @@ pub async fn get_thumb_path(
         }
     }
     if !path.exists() {
-        return Err(PicOrgError::Internal(format!(
+        return Err(AppError::Internal(format!(
             "thumbnail not available for image {}",
             id
         )));
@@ -41,7 +41,7 @@ pub async fn get_thumb_path(
 pub async fn get_image_path(
     services: State<'_, Arc<AppServices>>,
     id: i64,
-) -> PicOrgResult<String> {
-    let details = queries::get_image(&services.db, id)?;
+) -> AppResult<String> {
+    let details = queries::get_image_row(&services.db, id)?;
     Ok(details.summary.path)
 }

@@ -15,7 +15,7 @@ source becomes a 256×170 small and 512×341 medium.
 
 ## Location
 
-Files live in `%APPDATA%\com.picorg.picorg\thumbs\`:
+Files live in `%APPDATA%\com.magpie.app\thumbs\`:
 
 ```
 <id>-small.webp
@@ -23,7 +23,7 @@ Files live in `%APPDATA%\com.picorg.picorg\thumbs\`:
 ```
 
 Using the image id (rather than a hash of the source path) keeps the
-cache invariant across file renames: as long as PicOrg still knows
+cache invariant across file renames: as long as Magpie still knows
 about the image, the thumbnail is reusable.
 
 ## Generation
@@ -59,7 +59,7 @@ Details:
 
 A thumbnail is considered fresh iff its file mtime is ≥ the source
 file's mtime. Editing metadata does not change the source mtime
-enough to invalidate a thumbnail (unless PicOrg's embed-XMP write
+enough to invalidate a thumbnail (unless Magpie's embed-XMP write
 touched the JPEG — in which case the thumbnail regenerates on next
 scan, which is correct because the JPEG has actually changed).
 
@@ -83,7 +83,7 @@ The `Small` WebP averages 4–8 KB per photo; `Medium` averages
 1–2 GB.
 
 There's no automatic eviction in v1. Users who want to trim the
-cache can delete `%APPDATA%\com.picorg.picorg\thumbs\` — PicOrg
+cache can delete `%APPDATA%\com.magpie.app\thumbs\` — Magpie
 regenerates on demand.
 
 ## Async model

@@ -1,10 +1,10 @@
 [book]
-title = "PicOrg Developer Guide"
-authors = ["PicOrg Contributors"]
+title = "Magpie Developer Guide"
+authors = ["Magpie Contributors"]
 language = "en"
 multilingual = false
 src = "src"
-description = "Functional overview, architecture, and detailed design of PicOrg."
+description = "Functional overview, architecture, and detailed design of Magpie."
 
 [output.html]
 default-theme = "light"

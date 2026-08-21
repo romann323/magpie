@@ -24,8 +24,8 @@
 
 - Every metadata mutation is **transactional** at the SQLite level.
   If any part of the transaction fails, none of it lands.
-- Every file write (sidecar or embedded XMP) is **atomic** via
-  write-to-temp + rename.
+- Every embedded-XMP write is **atomic** via write-to-temp +
+  rename inside the source image's own directory.
 - Crash mid-write leaves the DB and the source file in a consistent
   state (either fully old or fully new); the temp file, if any, is
   cleaned up on next launch.
@@ -40,7 +40,7 @@
 - **Long paths:** All Rust `PathBuf` handling supports `\\?\`-prefixed
   paths natively. Tested end-to-end with 300-character paths.
 - **OneDrive:** Files-on-demand (reparse points) are read as their
-  underlying content once materialized; PicOrg does not force
+  underlying content once materialized; Magpie does not force
   hydration.
 
 ## Interoperability
@@ -64,7 +64,7 @@
 ## Observability
 
 - File-based rolling log at
-  `%APPDATA%\com.picorg.picorg\logs\picorg.log`.
+  `%APPDATA%\com.magpie.app\logs\app.log`.
 - Structured log fields via `tracing`: `id`, `image_path`,
   `operation`, `duration_ms`.
 - Frontend can push crumbs into the same log via the

@@ -1,9 +1,9 @@
 use crate::core::metadata::read as meta_read;
 use crate::core::thumbnail;
-use crate::core::{is_image_ext, AppServices};
+use crate::core::AppServices;
 use crate::db::queries;
 use crate::db::queries::FileStat;
-use crate::error::{PicOrgError, PicOrgResult};
+use crate::error::{AppError, AppResult};
 use crate::types::{ScanProgress, ScanResult};
 use jwalk::WalkDir;
 use std::collections::HashSet;
@@ -12,7 +12,7 @@ use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter};
 
-pub const SCAN_EVENT: &str = "picorg://scan";
+pub const SCAN_EVENT: &str = "app://scan";
 
 #[derive(Default)]
 struct Counters {
@@ -27,23 +27,33 @@ pub async fn scan_folder(
     app_handle: AppHandle,
     folder_id: i64,
     root: PathBuf,
-) -> PicOrgResult<ScanResult> {
+) -> AppResult<ScanResult> {
     if !root.exists() {
-        return Err(PicOrgError::PathNotFound(root.display().to_string()));
+        return Err(AppError::PathNotFound(root.display().to_string()));
     }
     if !root.is_dir() {
-        return Err(PicOrgError::NotADirectory(root.display().to_string()));
+        return Err(AppError::NotADirectory(root.display().to_string()));
     }
 
     tracing::info!(?root, folder_id, "starting scan");
 
+    // Snapshot of extensions the registry answers to. The scanner picks up
+    // every file whose extension is in this set — adding a new format
+    // handler automatically makes its files scannable.
+    let known_exts: HashSet<String> = services
+        .formats
+        .all_extensions()
+        .into_iter()
+        .collect();
+
     // ---------- Phase 1: enumerate files (fast) ----------
     let files: Vec<PathBuf> = tokio::task::spawn_blocking({
         let root = root.clone();
-        move || collect_image_paths(&root)
+        let exts = known_exts.clone();
+        move || collect_paths(&root, &exts)
     })
     .await
-    .map_err(|e| PicOrgError::Internal(format!("scan task join: {e}")))?;
+    .map_err(|e| AppError::Internal(format!("scan task join: {e}")))?;
 
     let total = files.len() as i64;
     tracing::info!(count = total, "scan enumerated files");
@@ -151,7 +161,7 @@ fn emit_progress(app: &AppHandle, p: &ScanProgress) -> tauri::Result<()> {
     app.emit(SCAN_EVENT, p)
 }
 
-fn collect_image_paths(root: &Path) -> Vec<PathBuf> {
+fn collect_paths(root: &Path, known_exts: &HashSet<String>) -> Vec<PathBuf> {
     let mut out = Vec::new();
     for entry in WalkDir::new(root)
         .skip_hidden(true)
@@ -162,7 +172,7 @@ fn collect_image_paths(root: &Path) -> Vec<PathBuf> {
         if entry.file_type().is_file() {
             let p = entry.path();
             if let Some(ext) = p.extension().and_then(|e| e.to_str()) {
-                if is_image_ext(ext) {
+                if known_exts.contains(&ext.to_ascii_lowercase()) {
                     out.push(p);
                 }
             }
@@ -181,7 +191,7 @@ fn process_one(
     services: &Arc<AppServices>,
     folder_id: i64,
     path: &Path,
-) -> PicOrgResult<ProcessOutcome> {
+) -> AppResult<ProcessOutcome> {
     let meta_fs = std::fs::metadata(path)?;
     let size_bytes = meta_fs.len() as i64;
     let mtime_ms = meta_fs
@@ -211,7 +221,6 @@ fn process_one(
         mtime_ms,
     };
 
-    // was_new: did we insert a fresh row?
     let existed_before = queries::image_exists_by_path(&services.db, &stat.path)?;
     let (image_id, changed) = queries::upsert_image_stat(&services.db, &stat)?;
 
@@ -219,7 +228,7 @@ fn process_one(
         return Ok(ProcessOutcome::Unchanged);
     }
 
-    match meta_read::read_all(path) {
+    match meta_read::read_all(&services.formats, path) {
         Ok(meta) => {
             queries::set_image_meta(&services.db, image_id, &meta)?;
         }

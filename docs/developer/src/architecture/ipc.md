@@ -24,9 +24,9 @@ wire, and TypeScript types on the frontend side. See
   serialised into the JSON payload as-is. The frontend passes them
   as `camelCase` object keys because we set
   `#[serde(rename_all = "camelCase")]` on every argument struct.
-- **Events** use a `picorg://` prefix and a resource-style name:
-  `picorg://image-updated`, `picorg://images-deleted`,
-  `picorg://scan`.
+- **Events** use a `app://` prefix and a resource-style name:
+  `app://image-updated`, `app://images-deleted`,
+  `app://scan`.
 
 ## Argument struct design
 
@@ -61,10 +61,12 @@ export interface ImageDetails {
   // ...
   tags: string[]
   title: string | null
-  rating: number | null
-  comment: string | null
   metaWrittenAt: number | null
   metaReadAt: number | null
+  // Populated per-request by the active format handler:
+  technical: Array<[string, string]>
+  formatHandler: string
+  canWriteTags: boolean
 }
 ```
 
@@ -75,9 +77,9 @@ frontend catches up.
 
 ## Error handling
 
-- Rust commands return `PicOrgResult<T>` (an alias for
-  `Result<T, PicOrgError>`).
-- `PicOrgError` is a `thiserror::Error` enum with a `Display` that's
+- Rust commands return `AppResult<T>` (an alias for
+  `Result<T, AppError>`).
+- `AppError` is a `thiserror::Error` enum with a `Display` that's
   safe to show to the user (no internal paths in error messages,
   etc.).
 - On the wire, errors serialise to a plain string. The frontend
@@ -88,9 +90,9 @@ frontend catches up.
 
 | Event                       | Payload                            | Fired when                                     |
 | --------------------------- | ---------------------------------- | ---------------------------------------------- |
-| `picorg://scan`             | `ScanProgress { folder_id, done, total, current }` | During a folder scan.  |
-| `picorg://image-updated`    | `i64` (image id)                   | After successful metadata write.               |
-| `picorg://images-deleted`   | `Vec<i64>` (deleted ids)           | After successful delete.                       |
+| `app://scan`             | `ScanProgress { folder_id, done, total, current }` | During a folder scan.  |
+| `app://image-updated`    | `i64` (image id)                   | After successful metadata write.               |
+| `app://images-deleted`   | `Vec<i64>` (deleted ids)           | After successful delete.                       |
 
 Listeners are attached in `App.tsx` via `useEffect` + `onScanProgress`
 etc., and each listener updates the appropriate TanStack Query cache

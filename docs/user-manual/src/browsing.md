@@ -1,68 +1,72 @@
 # Browsing your library
 
-The centre of the PicOrg window is a **virtualised image grid**. It can
-scroll through hundreds of thousands of photos without slowing down —
-only the tiles visible in the viewport are actually drawn.
+The big area in the middle of the window is your **file grid**. It
+shows every file Magpie knows about, all in one long scrollable page.
+Even with tens of thousands of files, it stays smooth to scroll.
 
-## The grid
+## Picking files
 
-Each tile shows a thumbnail plus the filename and pixel dimensions.
-Hover a tile to see the full path in a tooltip; click to open the
-photo in the details panel on the right.
+- **Click a file** to select it. It gets a blue outline, and its
+  details appear in the panel on the right.
+- **Ctrl + click** more files to add them to the selection.
+- **Shift + click** somewhere else in the grid to grab everything
+  between the first and the new click.
+- **Ctrl + A** picks every file currently shown.
+- **Esc** unpicks everything.
 
-- **Click** — select a photo (replaces any previous selection).
-- **Ctrl+click** — add/remove a photo from the current selection.
-- **Shift+click** — select a range from the last-clicked photo to the
-  clicked one.
-- **Double-click** — (reserved for future full-screen preview.)
-- **Delete key** — move the current selection to the Recycle Bin,
-  after a confirmation prompt.
+The number of selected files is shown in the panel on the right and
+in the status bar at the bottom.
 
-The count in the top-left of the grid header (`152 images`) is the
-number of photos that match the current filter, not necessarily the
-whole library.
+## Sorting the grid
 
-## Sorting
+There's a **Sort** menu in the top bar. Choose what makes sense for
+the moment:
 
-The **Sort** control at the top-right of the grid controls the order:
+- **Taken** — when the file was taken/created (from the file itself).
+  Great for going through a trip in order.
+- **Filename** — A to Z by name.
+- **Added** — the day the file was added to your library.
+- **Size** — largest or smallest first.
 
-- **Taken** — by the date the photo was captured (from EXIF
-  `DateTimeOriginal`). Missing dates fall to the end.
-- **Modified** — by file system modification time.
-- **Filename** — alphabetical.
-- **Rating** — 5 stars first, unrated last.
-- **Random** — a shuffled order that stays stable while the filter
-  doesn't change.
-
-Toggle the arrow next to the sort control to flip between ascending
+The little arrow next to the sort menu flips between ascending
 and descending.
 
-## The details panel
+## The details panel on the right
 
-The right-hand pane shows details for the currently selected photo (or
-photos, if more than one is selected). When nothing is selected, it
-prompts you to pick something.
+Click a file and its details appear on the right, split into four
+sections:
 
-You can hide the details panel via the icon in the top-right corner to
-give the grid more room. Toggle it back on from the same spot.
+1. **Title** — a short, editable name.
+2. **Tags** — labels you add for grouping and searching.
+3. **Format metadata** — which handler Magpie is using and whether it
+   can save your edits into the file itself.
+4. **File info** — read-only technical information (size, resolution,
+   camera, duration, page count…). What appears here depends on the
+   file type.
 
-## Sidebar filters
+Editing any of the top two sections saves automatically — no Save
+button. The next chapter,
+[Editing metadata](./editing-metadata.md), goes into detail.
 
-The sidebar on the left has three sections that all act as filters:
+If you pick more than one file at once, the details panel switches
+into a batch mode — see
+[Working on many files at once](./multi-select.md).
 
-1. **Library › Folders** — click a folder to filter to just its
-   photos.
-2. **Rating** — click a rating threshold to show photos with **that
-   many stars or more**. So clicking "3 stars and up" shows 3-, 4-,
-   and 5-star photos.
-3. **Tags** — click a tag to filter to only photos with that tag.
-   Numbers on the right show how many photos are in each tag.
+## The sidebar filters
 
-Filters compose: click a folder **and** a rating **and** a tag and
-you'll see only photos matching all three. Combine with the search box
-for arbitrarily narrow queries.
+The list on the left is a set of filters — clicking one narrows down
+the grid to just matching files.
+
+- **Library › Folders**: show only files from one specific folder on
+  your computer.
+- **Tags**: show only files with a specific tag. The number next to
+  each tag is how many files have that tag.
+
+Filters stack. Click a folder **and** a tag and you see only files
+that match both. Add words to the search box at the top for even
+finer results.
 
 ## Clearing filters
 
-Click **All photos** at the top of the sidebar to reset every filter
-in one shot.
+Click **All photos** at the top of the sidebar to start fresh —
+every filter is cleared in one click.

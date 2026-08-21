@@ -1,4 +1,4 @@
-use crate::error::PicOrgResult;
+use crate::error::AppResult;
 use rusqlite::{params, Connection};
 
 const MIGRATIONS: &[(&str, &str)] = &[
@@ -109,9 +109,92 @@ const MIGRATIONS: &[(&str, &str)] = &[
         UPDATE images SET meta_read_at = NULL;
         "#,
     ),
+    (
+        // Drop the `rating` and `comment` columns from `images`. Magpie's UI
+        // no longer exposes these — the only user-editable metadata is Title
+        // and Tags. Existing values on disk (xmp:Rating, dc:description) are
+        // still readable by other tools; Magpie simply ignores them on write.
+        //
+        // Also recreate `images_fts` without the `comment` column, and clear
+        // meta_read_at so the next scan re-indexes cleanly.
+        "0003_drop_rating_comment",
+        r#"
+        BEGIN;
+
+        DROP INDEX IF EXISTS idx_images_rating;
+
+        CREATE TABLE images_new (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            folder_id       INTEGER NOT NULL REFERENCES library_folders(id) ON DELETE CASCADE,
+            path            TEXT NOT NULL UNIQUE,
+            filename        TEXT NOT NULL,
+            ext             TEXT NOT NULL,
+            size_bytes      INTEGER NOT NULL,
+            mtime_ms        INTEGER NOT NULL,
+            width           INTEGER,
+            height          INTEGER,
+            content_hash    TEXT,
+            taken_at        INTEGER,
+            camera_make     TEXT,
+            camera_model    TEXT,
+            title           TEXT,
+            meta_written_at INTEGER,
+            meta_read_at    INTEGER,
+            missing         INTEGER NOT NULL DEFAULT 0
+        );
+
+        INSERT INTO images_new
+            (id, folder_id, path, filename, ext, size_bytes, mtime_ms,
+             width, height, content_hash, taken_at, camera_make, camera_model,
+             title, meta_written_at, meta_read_at, missing)
+        SELECT
+             id, folder_id, path, filename, ext, size_bytes, mtime_ms,
+             width, height, content_hash, taken_at, camera_make, camera_model,
+             title, meta_written_at, meta_read_at, missing
+        FROM images;
+
+        DROP TABLE images;
+        ALTER TABLE images_new RENAME TO images;
+
+        CREATE INDEX idx_images_folder   ON images(folder_id);
+        CREATE INDEX idx_images_taken_at ON images(taken_at);
+        CREATE INDEX idx_images_filename ON images(filename);
+
+        DROP TABLE IF EXISTS images_fts;
+        CREATE VIRTUAL TABLE images_fts USING fts5(
+            title, filename, tags,
+            content='',
+            contentless_delete=1,
+            tokenize='unicode61 remove_diacritics 2'
+        );
+
+        INSERT INTO images_fts(rowid, title, filename, tags)
+        SELECT
+            i.id,
+            COALESCE(i.title, ''),
+            i.filename,
+            COALESCE(
+                (SELECT GROUP_CONCAT(t.name, ' ')
+                 FROM tags t JOIN image_tags it ON it.tag_id = t.id
+                 WHERE it.image_id = i.id),
+                ''
+            )
+        FROM images i;
+
+        -- Any smart collection that filtered by rating/comment is now stale.
+        -- Rather than migrate JSON, drop the filter-by-rating clauses by
+        -- wiping the whole filter (users can recreate). This is only
+        -- reachable if a user actually created smart collections in v1.
+        UPDATE smart_collections SET filter = '{}' WHERE filter LIKE '%rating%' OR filter LIKE '%comment%';
+
+        UPDATE images SET meta_read_at = NULL;
+
+        COMMIT;
+        "#,
+    ),
 ];
 
-pub fn run(conn: &Connection) -> PicOrgResult<()> {
+pub fn run(conn: &Connection) -> AppResult<()> {
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS _migrations (
             name TEXT PRIMARY KEY,

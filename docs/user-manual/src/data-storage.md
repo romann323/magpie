@@ -1,83 +1,96 @@
 # Where your data lives
 
-PicOrg is a **local, transparent** photo manager. Everything it stores
-is either standard XMP (in your photos and next to them) or a cache
-under your app data folder that you can delete at any time without
-losing information.
+A quick, plain-language tour of what Magpie puts where. You don't
+need to know any of this to use the app — but many people like
+knowing exactly where their information ends up.
 
-## The three places PicOrg writes
+## Your files
 
-### 1. Sidecar `.xmp` files (next to each photo)
+**Your files stay where you put them.** Magpie never moves, renames,
+or changes them (except to write tags into ones that support it — see
+below). If you added `C:\Users\me\Pictures\Vacation 2024`, that's
+where the files still live.
 
-For every photo you edit, PicOrg creates or updates a sibling `.xmp`
-file:
+## Your tags and titles
+
+Whenever you tag a file or give it a title, Magpie tries to save
+that **inside the file itself**, using the standard XMP metadata
+format that Windows Explorer, Adobe Lightroom, and other tools also
+understand. A tag you add in Magpie immediately shows up in File
+Explorer's *Details* tab.
+
+Right now Magpie can embed tags into:
+
+- **JPEG** (`.jpg`, `.jpeg`)
+- **PNG** (`.png`)
+- **WebP** (`.webp`)
+- **GIF** (`.gif`, GIF89a only)
+
+**Your files still open and look exactly the same** — only a small
+note about the file is added.
+
+**No sidecar files.** Magpie does **not** create any extra `.xmp`
+files next to your files. Everything lives inside the file itself.
+
+### File types where tags stay in Magpie only
+
+For everything else (RAW, HEIC, TIFF, PDF, video, …) Magpie **still
+lets you tag the file** — the tag just gets remembered in Magpie's
+own library instead of embedded in the file. See
+[Supported file formats](./file-formats.md) for the full list.
+
+The trade-off: those tags are visible everywhere in Magpie, but if
+you copy the file to another computer they don't come along.
+
+### Legacy `.xmp` files
+
+If you used an older version of Magpie or Adobe Lightroom, some of
+your files may already have a small `.xmp` companion file next to
+them. Magpie still **reads** those on first scan so you don't lose
+your existing tags. As soon as you save an edit to that file,
+Magpie embeds the new tags into the file itself and **deletes the
+leftover `.xmp` file** — from then on the file is the single
+source of truth.
+
+## Magpie's own workshop
+
+Magpie keeps its own private files in a hidden Windows folder:
 
 ```
-📁 Trips\Iceland\
-   IMG_2043.jpg      ← your photo, untouched (see next section)
-   IMG_2043.xmp      ← Adobe-standard XMP sidecar written by PicOrg
+C:\Users\<you>\AppData\Roaming\com.magpie.app\
 ```
 
-The sidecar is a plain UTF-8 XML file you can open in any editor. It
-follows the Lightroom convention (strip original extension, use
-`.xmp`), so Lightroom, Bridge, digiKam, and darktable all read it.
+That folder has:
 
-### 2. Embedded XMP inside the source JPEG
+- A little database that remembers what's in your library, so opening
+  the app is instant.
+- Tags for read-only formats (RAW, HEIC, PDF, video, …) that can't
+  be embedded in the source file.
+- Small thumbnail images so the grid loads without delay.
+- A log file that helps if you ever run into trouble.
 
-**Since v1**, PicOrg also injects a standard XMP APP1 segment into the
-source JPEG itself so tools that ignore sidecars (Windows Explorer's
-Details tab, the Photos app, most viewers) still see your tags,
-title, rating, and comment.
+**None of your original files live in this folder.** You can delete
+the whole folder if you want — Magpie will just re-scan your library
+next time. Tags on read-only formats will be lost.
 
-- Non-JPEG formats (PNG, HEIC, RAW, TIFF, WebP) get only the sidecar
-  in v1. This is a safe default that never touches the pixels.
-- The injection is atomic: PicOrg writes a temp file next to the
-  original and renames over it, so a crash mid-write never leaves you
-  with a truncated photo.
-- If the source file is on read-only media, PicOrg logs a warning and
-  falls back to sidecar-only.
+## The three golden rules
 
-### 3. PicOrg's own cache and index
+1. **Magpie never moves your files.** They stay in the folders where
+   you put them.
+2. **Magpie never uploads anything.** No internet, no cloud, no
+   account.
+3. **For writable formats, tags live inside the file.** So if you
+   copy a JPEG or PNG to another computer, its tags come along for
+   the ride — no extra files needed.
 
-Under `%APPDATA%\com.picorg.picorg\`:
+## Backing up
 
-```
-📁 com.picorg.picorg\
-   picorg.db                ← SQLite index of every photo you've added
-   📁 thumbs\               ← WebP thumbnails, keyed by photo id
-   📁 logs\
-      picorg.log            ← rolling log; useful if something misbehaves
-```
+To back up your library:
 
-None of this is your data — it's derived from your files and can be
-rebuilt at any time by rescanning. Feel free to delete the whole
-folder to reset PicOrg.
+1. **Back up your file folders.** Tags for JPEG/PNG/WebP/GIF are
+   inside the files themselves — that covers most photos.
+2. **Also back up Magpie's workshop folder** if you tagged read-only
+   files (RAW, PDF, video…) — those tags live only there.
 
-## What PicOrg **never** does
-
-- **It does not move or rename your photos.** Ever. Files stay where
-  you put them.
-- **It does not upload anything.** There is no server, no telemetry,
-  no analytics.
-- **It does not modify the pixels.** The only thing it changes in
-  the source file is the XMP segment.
-- **It does not touch photos in folders you haven't added.**
-
-## Round-trip guarantees
-
-If tool X wrote a tag into your photo, PicOrg reads it. If PicOrg
-writes a tag, tool X sees it. Concretely:
-
-| Tag written by            | Read back correctly in                                             |
-| ------------------------- | ------------------------------------------------------------------ |
-| Windows Explorer          | PicOrg, Lightroom, Bridge, digiKam                                 |
-| PicOrg                    | Windows Explorer, Photos app, Lightroom, Bridge, digiKam           |
-| Adobe Lightroom sidecar   | PicOrg (from sidecar), Bridge (from sidecar), digiKam              |
-| digiKam                   | PicOrg (both embedded and sidecar), Lightroom, Bridge              |
-
-## Portability
-
-Your library is portable: copy the folder tree to another machine
-(with the sidecar files) and every tag, rating, title, and comment
-comes with it. Point a fresh PicOrg install at the folder and it
-re-indexes in a couple of minutes.
+So "copy my Pictures folder and `%APPDATA%\com.magpie.app` to a
+backup drive" is a complete backup.

@@ -26,8 +26,8 @@ npm --version
 ## Clone and build
 
 ```powershell
-git clone <repo> picorg
-cd picorg
+git clone <repo> magpie
+cd magpie
 npm install
 ```
 
@@ -53,7 +53,7 @@ npm run tauri build -- --no-bundle
 ```
 
 - `--no-bundle` skips the MSI/NSIS installer, producing just
-  `src-tauri/target/release/picorg.exe`. Faster and useful for
+  `src-tauri/target/release/desktop.exe`. Faster and useful for
   local testing.
 - Remove `--no-bundle` (or pass `--bundles msi` / `--bundles nsis`)
   to produce an installer under `src-tauri/target/release/bundle/`.
@@ -70,8 +70,8 @@ Key fields in `src-tauri/tauri.conf.json`:
 
 | Field                    | Notes                                                    |
 | ------------------------ | -------------------------------------------------------- |
-| `productName`            | `PicOrg`                                                 |
-| `identifier`             | `com.picorg.picorg` — used for `%APPDATA%` folder name.  |
+| `productName`            | `Magpie`                                                 |
+| `identifier`             | `com.magpie.app` — used for `%APPDATA%` folder name.  |
 | `security.csp`           | Strict; blocks inline scripts and remote origins.        |
 | `app.withGlobalTauri`    | `false` — commands accessed via `@tauri-apps/api` only.  |
 | `bundle.icon`            | Multi-size Windows ICO.                                  |

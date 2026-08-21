@@ -2,7 +2,7 @@ use serde::Serialize;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
-pub enum PicOrgError {
+pub enum AppError {
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
 
@@ -43,19 +43,19 @@ pub enum PicOrgError {
     Internal(String),
 }
 
-impl From<image::ImageError> for PicOrgError {
+impl From<image::ImageError> for AppError {
     fn from(e: image::ImageError) -> Self {
-        PicOrgError::ImageDecode(e.to_string())
+        AppError::ImageDecode(e.to_string())
     }
 }
 
-impl From<anyhow::Error> for PicOrgError {
+impl From<anyhow::Error> for AppError {
     fn from(e: anyhow::Error) -> Self {
-        PicOrgError::Internal(e.to_string())
+        AppError::Internal(e.to_string())
     }
 }
 
-impl Serialize for PicOrgError {
+impl Serialize for AppError {
     fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
         #[derive(Serialize)]
         struct Payload<'a> {
@@ -63,22 +63,22 @@ impl Serialize for PicOrgError {
             message: String,
         }
         let code = match self {
-            PicOrgError::Io(_) => "io",
-            PicOrgError::Db(_) => "db",
-            PicOrgError::Pool(_) => "pool",
-            PicOrgError::PathNotFound(_) => "path_not_found",
-            PicOrgError::NotADirectory(_) => "not_a_directory",
-            PicOrgError::ImageNotFound(_) => "image_not_found",
-            PicOrgError::FolderNotFound(_) => "folder_not_found",
-            PicOrgError::UnsupportedFormat(_) => "unsupported_format",
-            PicOrgError::ImageDecode(_) => "image_decode",
-            PicOrgError::MetadataRead(_) => "metadata_read",
-            PicOrgError::MetadataWrite(_) => "metadata_write",
-            PicOrgError::BadInput(_) => "bad_input",
-            PicOrgError::Internal(_) => "internal",
+            AppError::Io(_) => "io",
+            AppError::Db(_) => "db",
+            AppError::Pool(_) => "pool",
+            AppError::PathNotFound(_) => "path_not_found",
+            AppError::NotADirectory(_) => "not_a_directory",
+            AppError::ImageNotFound(_) => "image_not_found",
+            AppError::FolderNotFound(_) => "folder_not_found",
+            AppError::UnsupportedFormat(_) => "unsupported_format",
+            AppError::ImageDecode(_) => "image_decode",
+            AppError::MetadataRead(_) => "metadata_read",
+            AppError::MetadataWrite(_) => "metadata_write",
+            AppError::BadInput(_) => "bad_input",
+            AppError::Internal(_) => "internal",
         };
         Payload { code, message: self.to_string() }.serialize(s)
     }
 }
 
-pub type PicOrgResult<T> = Result<T, PicOrgError>;
+pub type AppResult<T> = Result<T, AppError>;

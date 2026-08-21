@@ -1,7 +1,7 @@
 # Repository layout
 
 ```
-PicOrg/
+Magpie/
 ├─ src/                                # React frontend (TypeScript)
 │  ├─ App.tsx                          # Root component; layout + event listeners
 │  ├─ main.tsx                         # ReactDOM entry
@@ -11,10 +11,9 @@ PicOrg/
 │  ├─ types.ts                         # Mirrors Rust types
 │  └─ features/
 │     ├─ TopBar.tsx                    # Top-of-window: add folder, rescan, search, sort
-│     ├─ Sidebar.tsx                   # Left: library / rating / tag filters
-│     ├─ ImageGrid.tsx                 # Virtualised photo grid
-│     ├─ DetailsPanel.tsx              # Right: SingleDetails / MultiDetails
-│     ├─ StarRating.tsx                # 5-star clickable widget
+│     ├─ Sidebar.tsx                   # Left: library / tag filters
+│     ├─ ImageGrid.tsx                 # Virtualised file grid
+│     ├─ DetailsPanel.tsx              # Right: SingleDetails / MultiDetails (Title / Tags / Format / Info)
 │     ├─ TagInput.tsx                  # Tag entry with autocompletion
 │     ├─ Thumbnail.tsx                 # <img> wrapper with async src
 │     └─ StatusBar.tsx                 # Bottom: scan progress, app version
@@ -33,22 +32,31 @@ PicOrg/
 │  └─ src/
 │     ├─ main.rs                       # Windows subsystem entry — calls lib::run
 │     ├─ lib.rs                        # Tauri builder, logging, handler registration
-│     ├─ error.rs                      # PicOrgError, PicOrgResult
+│     ├─ error.rs                      # AppError, AppResult
 │     ├─ types.rs                      # Rust-side IPC types (mirror src/types.ts)
 │     ├─ db/
 │     │  ├─ mod.rs                     # Db (Mutex<Connection>) + with_conn helper
 │     │  ├─ migrations.rs              # SQL migrations (schema + FTS fix)
 │     │  └─ queries.rs                 # apply_metadata_patch, get_image, etc.
 │     ├─ core/
-│     │  ├─ mod.rs                     # AppServices, image-ext filter, dirs
+│     │  ├─ mod.rs                     # AppServices, FormatRegistry, dirs
 │     │  ├─ scanner.rs                 # Parallel folder scan
 │     │  ├─ thumbnail.rs               # Thumb generation + caching
+│     │  ├─ formats/                   # Per-format handlers (registry-based)
+│     │  │  ├─ mod.rs                  # FormatHandler trait + FormatRegistry
+│     │  │  ├─ common.rs               # Atomic write, EXIF/dims utilities
+│     │  │  ├─ xmp_packet.rs           # XMP parse + build (single source of truth)
+│     │  │  ├─ jpeg.rs                 # writable
+│     │  │  ├─ png.rs                  # writable
+│     │  │  ├─ webp.rs                 # writable
+│     │  │  ├─ gif.rs                  # writable (GIF89a only)
+│     │  │  ├─ tiff.rs                 # read-only
+│     │  │  └─ stubs.rs                # HEIC, PDF, video, RAW, … (read-only)
 │     │  └─ metadata/
 │     │     ├─ mod.rs
-│     │     ├─ read.rs                 # EXIF + XMP read, sidecar merge
-│     │     ├─ write.rs                # Sidecar + embedded XMP write
-│     │     ├─ sidecar.rs              # Path helpers (foo.jpg → foo.xmp)
-│     │     └─ xmp.rs                  # XMP parse + build + embed in JPEG
+│     │     ├─ read.rs                 # Delegates to registry + legacy sidecar
+│     │     ├─ write.rs                # Delegates to registry + sidecar cleanup
+│     │     └─ sidecar.rs              # Legacy `.xmp` path helper (read + cleanup)
 │     └─ commands/                     # Tauri command handlers
 │        ├─ mod.rs
 │        ├─ library.rs                 # add/remove/list folders, rescan

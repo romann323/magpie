@@ -31,5 +31,7 @@
 - [Thumbnail pipeline](./design/thumbnails.md)
 - [Metadata read path](./design/metadata-read.md)
 - [Metadata write path](./design/metadata-write.md)
+- [File formats](./design/file-formats.md)
+- [Adding a format handler](./design/adding-a-format-handler.md)
 - [Testing strategy](./design/testing.md)
 - [Build and release](./design/build.md)

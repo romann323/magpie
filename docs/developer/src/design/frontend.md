@@ -30,8 +30,8 @@ Owns the top-level layout:
 ```
 
 Also hosts the global keyboard listener (Delete key), and mounts
-event listeners for `picorg://image-updated` and
-`picorg://images-deleted` — both of which invalidate the relevant
+event listeners for `app://image-updated` and
+`app://images-deleted` — both of which invalidate the relevant
 query keys.
 
 ## `src/store.ts` (Zustand)
@@ -40,7 +40,7 @@ Global UI-only state:
 
 ```ts
 interface Store {
-  view: View                // 'all' | { folderId } | { rating } | { tag }
+  view: View                // 'all' | { folderId } | { tag }
   search: string
   sort: ImageSort
   extraFilter: ImageFilter  // sidebar filters composed
@@ -76,7 +76,7 @@ Plus event-listener helpers:
 
 ```ts
 export const onImageUpdated = (h: (id: number) => void) =>
-  listen<number>('picorg://image-updated', e => h(e.payload))
+  listen<number>('app://image-updated', e => h(e.payload))
 ```
 
 And the diagnostic helper `logFrontend(level, msg)` for pushing
@@ -122,20 +122,25 @@ rationale (no derived types).
   - 1 selected → `<SingleDetails id=… />`.
   - >1 selected → `<MultiDetails ids=… />`.
 
-`SingleDetails` seeds local edit state from the query result only
-when the `id` changes (guarded by `lastLoadedId.current`). This
-avoids the "stomp typing on refetch" bug that used to happen.
+`SingleDetails` renders four fixed sections:
 
-`MultiDetails` uses refs (`tagsAddRef`, `tagsRemoveRef`) mirroring
-state so the mutation dispatch always sees the latest values,
-even if a blur-triggered `setTagsAdd` and a click on `Apply` land
-in the same React batch.
+1. **Title** — editable input, auto-saves via `updateImageMetadata`.
+2. **Tags** — `TagInput`, auto-saves via `updateImageMetadata`.
+3. **Format metadata** — read-only: handler name +
+   `canWriteTags` note. Room to grow into per-format editable
+   fields (GPS, description, …) as those handlers add them.
+4. **File info** — `<dl>` of the `technical` list returned by the
+   backend.
 
-### `StarRating.tsx`
+Local edit state is seeded from the query result only when the
+`id` changes (guarded by `lastLoadedId.current`), avoiding the
+"stomp typing on refetch" bug.
 
-Purely presentational — takes `value: number | null` and
-`onChange`, renders five buttons. Clicking the current value
-sends `null` (reset).
+`MultiDetails` shows two `TagInput`s (Add / Remove) and an
+Apply button. It uses refs (`tagsAddRef`, `tagsRemoveRef`)
+mirroring state so the mutation dispatch always sees the latest
+values, even if a blur-triggered `setTagsAdd` and a click on
+`Apply` land in the same React batch.
 
 ### `TagInput.tsx`
 
@@ -153,7 +158,7 @@ sends `null` (reset).
 
 ### `StatusBar.tsx`
 
-- Listens to `picorg://scan` events, shows a live progress bar and
+- Listens to `app://scan` events, shows a live progress bar and
   message.
 - Static labels for app version, DB size, thumbnail cache size.
 
@@ -167,7 +172,7 @@ sends `null` (reset).
 | `['images', filter, sort, page]`             | `queryImages`                  | any image mutation                                |
 | `['image', id]`                              | `getImage`                     | `update_image_metadata` (via `setQueryData`),     |
 |                                              |                                | `batch_update_metadata` (via `invalidateQueries`),|
-|                                              |                                | `picorg://image-updated` event                    |
+|                                              |                                | `app://image-updated` event                    |
 | `['smartCollections']`                       | `listSmartCollections`         | create/delete collection                          |
 
 ## Styling

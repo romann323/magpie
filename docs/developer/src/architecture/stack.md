@@ -1,6 +1,6 @@
 # Technology stack
 
-PicOrg uses a small, deliberate set of libraries. Every choice is
+Magpie uses a small, deliberate set of libraries. Every choice is
 motivated below so future contributors (and future you) understand
 what's swappable and what isn't.
 

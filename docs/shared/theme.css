@@ -1,31 +1,31 @@
 /*
- * Shared additional CSS for both PicOrg mdBook sites.
+ * Shared additional CSS for both Magpie mdBook sites.
  * Purely additive on top of the default light/navy themes — no overrides
  * of core layout so future mdBook updates don't break.
  */
 
 :root {
-  --picorg-accent: #4f46e5;
-  --picorg-accent-fg: #ffffff;
-  --picorg-callout-bg: #eef2ff;
-  --picorg-callout-border: #6366f1;
+  --doc-accent: #4f46e5;
+  --doc-accent-fg: #ffffff;
+  --doc-callout-bg: #eef2ff;
+  --doc-callout-border: #6366f1;
 }
 
 .navy, .coal, .ayu {
-  --picorg-callout-bg: rgba(99, 102, 241, 0.12);
-  --picorg-callout-border: #a5b4fc;
+  --doc-callout-bg: rgba(99, 102, 241, 0.12);
+  --doc-callout-border: #a5b4fc;
 }
 
 /* PDF download button injected by pdf-link.js */
-.picorg-pdf-button {
+.doc-pdf-button {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   padding: 6px 12px;
   margin: 0 4px;
   border-radius: 6px;
-  background: var(--picorg-accent);
-  color: var(--picorg-accent-fg) !important;
+  background: var(--doc-accent);
+  color: var(--doc-accent-fg) !important;
   font-size: 13px;
   font-weight: 500;
   text-decoration: none;
@@ -34,22 +34,22 @@
   transition: transform 0.1s ease, opacity 0.15s ease;
 }
 
-.picorg-pdf-button:hover {
+.doc-pdf-button:hover {
   transform: translateY(-1px);
   opacity: 0.92;
 }
 
-.picorg-pdf-button svg {
+.doc-pdf-button svg {
   width: 14px;
   height: 14px;
 }
 
-.picorg-doc-badge {
+.doc-badge {
   display: inline-block;
   padding: 2px 8px;
   border-radius: 999px;
-  background: var(--picorg-callout-bg);
-  color: var(--picorg-callout-border);
+  background: var(--doc-callout-bg);
+  color: var(--doc-callout-border);
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.02em;
@@ -62,8 +62,8 @@
  * such as "> **Note:** ..." — mdBook keeps these as plain blockquotes,
  * so we add a bit of visual weight to the first paragraph automatically. */
 blockquote {
-  border-left-color: var(--picorg-callout-border) !important;
-  background: var(--picorg-callout-bg);
+  border-left-color: var(--doc-callout-border) !important;
+  background: var(--doc-callout-bg);
   padding: 12px 16px;
   border-radius: 0 8px 8px 0;
 }
@@ -91,7 +91,7 @@ table th {
 
 /* Print output tweaks (for the browser-print-to-PDF path we still support). */
 @media print {
-  .picorg-pdf-button { display: none !important; }
+  .doc-pdf-button { display: none !important; }
   #menu-bar, .sidebar, .nav-chapters { display: none !important; }
   #content { max-width: 100% !important; padding: 0 !important; }
   a[href^="http"]::after { content: " (" attr(href) ")"; font-size: 90%; }

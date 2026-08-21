@@ -1,9 +1,9 @@
 param(
-    [string]$Exe = "src-tauri\target\release\picorg.exe",
+    [string]$Exe = "src-tauri\target\release\desktop.exe",
     [string]$Out = "screenshots\multiselect.png",
     [int]$StartupWaitSeconds = 12,
     # Where to check that our tag actually appears in the DB.
-    [string]$Db = "$env:APPDATA\com.picorg.picorg\picorg.db",
+    [string]$Db = "$env:APPDATA\com.magpie.app\library.db",
     [string]$TestTag = "batchtag-{0}" -f ([DateTime]::UtcNow.ToString("HHmmss"))
 )
 
@@ -52,7 +52,7 @@ public class Win {
 }
 "@ -ReferencedAssemblies "System.Drawing"
 
-function Get-PicOrgWindow {
+function Get-AppWindow {
     $script:found = New-Object System.Collections.ArrayList
     $cb = [Win+EnumWindowsProc] {
         param($h, $lp)
@@ -60,7 +60,7 @@ function Get-PicOrgWindow {
         $sb = New-Object System.Text.StringBuilder 256
         [Win]::GetWindowText($h, $sb, 256) | Out-Null
         $title = $sb.ToString()
-        if ($title -like "*PicOrg*") {
+        if ($title -like "*Magpie*") {
             [void]$script:found.Add([pscustomobject]@{ Hwnd = $h; Title = $title })
         }
         return $true
@@ -116,13 +116,13 @@ Write-Host "Launching $exePath"
 $proc = Start-Process -FilePath $exePath -PassThru
 Start-Sleep -Seconds $StartupWaitSeconds
 
-$wins = Get-PicOrgWindow
+$wins = Get-AppWindow
 if ($wins.Count -eq 0) {
     Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
-    throw "PicOrg window not found."
+    throw "Magpie window not found."
 }
 $hwnd = $wins[0].Hwnd
-Write-Host "Found PicOrg window: hwnd=$hwnd title='$($wins[0].Title)'"
+Write-Host "Found Magpie window: hwnd=$hwnd title='$($wins[0].Title)'"
 
 [Win]::ShowWindow($hwnd, 9) | Out-Null
 [Win]::SetForegroundWindow($hwnd) | Out-Null
@@ -189,7 +189,7 @@ if (Test-Path $Db) {
     # Use sqlite3 via .NET SqliteConnection? PowerShell doesn't ship with sqlite CLI.
     # Instead call the tag list via a tiny Rust example.
     Push-Location src-tauri
-    $env:PICORG_QUERY_TAG = $TestTag
+    $env:MAGPIE_QUERY_TAG = $TestTag
     cargo run -q --example dump_tag_usage 2>&1
     Pop-Location
 }

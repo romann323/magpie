@@ -5,7 +5,7 @@ and a rough entry point for the future contributor picking it up.
 
 ## Photo editing
 
-- **No crop, rotate, exposure, or colour correction.** PicOrg treats
+- **No crop, rotate, exposure, or colour correction.** Magpie treats
   pixels as read-only. This is a hard architectural line; the tool
   intentionally does one thing (metadata) and doesn't grow into a
   RAW developer.
@@ -21,7 +21,7 @@ and a rough entry point for the future contributor picking it up.
 
 - **No account, no cloud storage integration.** OneDrive and iCloud
   Photos are third-party sync backends the user configures at the OS
-  level; PicOrg reads whatever the OS has materialised.
+  level; Magpie reads whatever the OS has materialised.
 
 ## Video
 
@@ -30,26 +30,41 @@ and a rough entry point for the future contributor picking it up.
   thumbnail pipeline (currently the WebP encoder can't handle video
   frames).
 
-## RAW embedded XMP write
+## Sidecar XMP files
 
-- **RAW files get only a sidecar.** Modifying a proprietary RAW
-  container in place is risky and format-specific. The safer route
-  is to write a sibling `.xmp` that Lightroom, Bridge, and digiKam
-  read natively.
+- **Magpie does not create `.xmp` sidecar files.** All metadata is
+  embedded directly in the source image (JPEG APP1 / PNG iTXt). The
+  reader still parses a legacy sidecar authored by an older Magpie
+  version or by Lightroom on first scan, but the first successful
+  save embeds the merged metadata into the source and deletes the
+  sidecar. There is intentionally no "write to sidecar instead"
+  fallback and no configuration to enable one.
 
-## PNG / HEIC / TIFF embedded XMP write
+## Metadata write for RAW / HEIC / TIFF / WebP / GIF / BMP
 
-- Only JPEG has an embedded-XMP writer in v1. PNG (iTXt chunk) and
-  TIFF (XMP IFD tag) are straightforward extensions; HEIF's chunk
-  format is more involved. See
-  [`docs/developer/src/design/metadata-write.md`](../design/metadata-write.md)
-  for the JPEG implementation and where new formats would plug in.
+- The write path currently supports **only JPEG and PNG**. Attempts
+  to save metadata on any other format return `AppError::MetadataWrite`
+  and are surfaced to the UI as a "this format can't store Magpie
+  metadata" toast — Magpie refuses to silently drop the edit or
+  fall back to a sidecar.
+- Follow-ups (in likely difficulty order): WebP `XMP ` chunk in
+  the RIFF container, TIFF tag 700 in the primary IFD, HEIF item
+  property, and finally each RAW variant. See
+  [`Metadata write path`](../design/metadata-write.md) for where
+  new formats plug in — every one of them terminates in
+  `atomic_write_bytes` and a `format_supports_embedded_xmp(ext)`
+  gate.
+- Modifying proprietary RAW containers (`.CR2`, `.CR3`, `.NEF`,
+  `.ARW`, `.DNG`, `.RAF`, `.ORF`, `.RW2`, `.SRW`) in place is risky
+  and format-specific; a safe implementation would need per-vendor
+  handling and is a significant multi-release investment.
 
-## Ratings across pick / reject flags
+## Ratings, colour labels, pick / reject flags
 
-- No support yet for Lightroom-style `xmp:Label` colour labels or
-  `pick/reject` flags. Fields exist in the XMP namespace; would be
-  a small extension of the metadata patch struct.
+- No UI for star ratings, `xmp:Label` colour labels, or pick /
+  reject flags. Fields already exist in the XMP namespace and the
+  reader preserves them when foreign tools set them; wiring a UI
+  would be a small extension of the metadata patch struct.
 
 ## Multi-user / multi-library switching
 

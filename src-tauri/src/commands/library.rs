@@ -1,7 +1,7 @@
 use crate::core::scanner;
 use crate::core::AppServices;
 use crate::db::queries;
-use crate::error::{PicOrgError, PicOrgResult};
+use crate::error::{AppError, AppResult};
 use crate::types::{LibraryFolder, ScanResult};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -12,11 +12,17 @@ pub async fn add_library_folder(
     services: State<'_, Arc<AppServices>>,
     app_handle: AppHandle,
     path: String,
-) -> PicOrgResult<LibraryFolder> {
-    let canon = std::fs::canonicalize(&path).map_err(|_| PicOrgError::PathNotFound(path.clone()))?;
+) -> AppResult<LibraryFolder> {
+    let canon = std::fs::canonicalize(&path).map_err(|_| AppError::PathNotFound(path.clone()))?;
     if !canon.is_dir() {
-        return Err(PicOrgError::NotADirectory(canon.display().to_string()));
+        return Err(AppError::NotADirectory(canon.display().to_string()));
     }
+    // `std::fs::canonicalize` on Windows returns verbatim (`\\?\`) paths.
+    // Those are rejected by the Windows Shell property system with
+    // `E_INVALIDARG` when we later try to embed tags, so strip the prefix
+    // once here and store the friendly form in the DB — every file path
+    // scanned under this root inherits the same shape.
+    let canon = crate::core::formats::common::strip_windows_verbatim_prefix(&canon);
     let canon_str = canon.to_string_lossy().to_string();
     let folder = queries::add_folder(&services.db, &canon_str)?;
 
@@ -38,14 +44,14 @@ pub async fn add_library_folder(
 pub async fn remove_library_folder(
     services: State<'_, Arc<AppServices>>,
     id: i64,
-) -> PicOrgResult<()> {
+) -> AppResult<()> {
     queries::remove_folder(&services.db, id)
 }
 
 #[tauri::command]
 pub async fn list_library_folders(
     services: State<'_, Arc<AppServices>>,
-) -> PicOrgResult<Vec<LibraryFolder>> {
+) -> AppResult<Vec<LibraryFolder>> {
     queries::list_folders(&services.db)
 }
 
@@ -54,11 +60,11 @@ pub async fn rescan_folder(
     services: State<'_, Arc<AppServices>>,
     app_handle: AppHandle,
     id: i64,
-) -> PicOrgResult<ScanResult> {
+) -> AppResult<ScanResult> {
     let folder = queries::list_folders(&services.db)?
         .into_iter()
         .find(|f| f.id == id)
-        .ok_or(PicOrgError::FolderNotFound(id))?;
+        .ok_or(AppError::FolderNotFound(id))?;
     scanner::scan_folder(
         services.inner().clone(),
         app_handle,
@@ -72,7 +78,7 @@ pub async fn rescan_folder(
 pub async fn rescan_all(
     services: State<'_, Arc<AppServices>>,
     app_handle: AppHandle,
-) -> PicOrgResult<Vec<ScanResult>> {
+) -> AppResult<Vec<ScanResult>> {
     let folders = queries::list_folders(&services.db)?;
     let mut out = Vec::new();
     for f in folders {

@@ -3,14 +3,15 @@ use crate::core::metadata::sidecar::sidecar_path_for;
 use crate::core::metadata::write as meta_write;
 use crate::core::{thumbnail, AppServices};
 use crate::db::queries;
-use crate::error::PicOrgResult;
+use crate::db::queries::ImageDetailsRow;
+use crate::error::AppResult;
 use crate::types::*;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, State};
 
-pub const IMAGE_UPDATED_EVENT: &str = "picorg://image-updated";
-pub const IMAGES_DELETED_EVENT: &str = "picorg://images-deleted";
+pub const IMAGE_UPDATED_EVENT: &str = "app://image-updated";
+pub const IMAGES_DELETED_EVENT: &str = "app://images-deleted";
 
 #[tauri::command]
 pub async fn query_images(
@@ -18,7 +19,7 @@ pub async fn query_images(
     filter: Option<ImageFilter>,
     sort: Option<ImageSort>,
     page: Option<Pagination>,
-) -> PicOrgResult<Page<ImageSummary>> {
+) -> AppResult<Page<ImageSummary>> {
     let filter = filter.unwrap_or_default();
     let sort = sort.unwrap_or_default();
     let page = page.unwrap_or_default();
@@ -29,18 +30,17 @@ pub async fn query_images(
 pub async fn get_image(
     services: State<'_, Arc<AppServices>>,
     id: i64,
-) -> PicOrgResult<ImageDetails> {
-    // Pull the DB row first so we know the file path and last-read timestamp.
-    let cached = queries::get_image(&services.db, id)?;
+) -> AppResult<ImageDetails> {
+    let cached = queries::get_image_row(&services.db, id)?;
 
-    // Re-read metadata from disk if the image file or its sidecar has been
-    // modified since we last read metadata. This picks up tags/ratings set
-    // externally (Windows Explorer, digiKam, Lightroom, manually edited .xmp).
+    // Re-read metadata from disk if the file or its (legacy) sidecar has been
+    // modified since we last read metadata.
     let path = PathBuf::from(&cached.summary.path);
-    if refresh_needed_from_fs(&path, &cached) {
+    let cached = if refresh_needed_from_fs(&path, &cached) {
+        let registry = services.formats.clone();
         let path_bg = path.clone();
         let fresh = tauri::async_runtime::spawn_blocking(move || {
-            meta_read::read_all(&path_bg)
+            meta_read::read_all(&registry, &path_bg)
         })
         .await
         .ok()
@@ -50,19 +50,73 @@ pub async fn get_image(
             match queries::resync_user_meta_from_fs(&services.db, id, &m) {
                 Ok(()) => {
                     tracing::info!(id, "get_image: resynced user metadata from FS");
-                    return queries::get_image(&services.db, id);
+                    queries::get_image_row(&services.db, id)?
                 }
                 Err(e) => {
                     tracing::warn!(id, error = %e, "get_image: FS resync failed");
+                    cached
                 }
             }
+        } else {
+            cached
         }
-    }
+    } else {
+        cached
+    };
 
-    Ok(cached)
+    Ok(enrich_details(services.inner(), cached))
 }
 
-fn refresh_needed_from_fs(image_path: &Path, cached: &ImageDetails) -> bool {
+/// Wrap a DB row in the full IPC-facing `ImageDetails`, filling in the
+/// handler-provided technical metadata and format-info flags. The technical
+/// read happens synchronously — files are small headers, EXIF parsing is
+/// fast, and the DetailsPanel calls this at most a few times per second.
+///
+/// `can_write_tags` is `true` if either the native handler embeds tags OR
+/// the Windows Shell property system does — the DetailsPanel needs the
+/// combined capability so it doesn't grey out fields for RAW/video/PDF
+/// files where the write actually will succeed via the Shell fallback.
+fn enrich_details(services: &Arc<crate::core::AppServices>, row: ImageDetailsRow) -> ImageDetails {
+    let registry = &services.formats;
+    let path = std::path::Path::new(&row.summary.path);
+    let ext = row.summary.ext.clone();
+
+    let (format_handler, native_can_write, technical) = if let Some(h) = registry.for_ext(&ext) {
+        let tech = h.read_technical(path);
+        (
+            h.name().to_string(),
+            h.can_write_tags(),
+            tech.as_pairs(),
+        )
+    } else {
+        (String::new(), false, Vec::new())
+    };
+
+    // Compute the *effective* write mode. The dispatch in
+    // `write_metadata_to_source` mirrors this order exactly — native handler
+    // wins over Shell fallback, and both win over library-only.
+    let write_mode = if native_can_write {
+        crate::types::WriteMode::Native
+    } else if services.shell_can_write_tags(path) {
+        crate::types::WriteMode::Shell
+    } else {
+        crate::types::WriteMode::LibraryOnly
+    };
+    let can_write_tags = !matches!(write_mode, crate::types::WriteMode::LibraryOnly);
+
+    ImageDetails {
+        summary: row.summary,
+        tags: row.tags,
+        meta_written_at: row.meta_written_at,
+        meta_read_at: row.meta_read_at,
+        technical,
+        format_handler,
+        can_write_tags,
+        write_mode,
+    }
+}
+
+fn refresh_needed_from_fs(image_path: &Path, cached: &ImageDetailsRow) -> bool {
     let last_read = cached.meta_read_at.unwrap_or(0);
     let img_mtime_ms = std::fs::metadata(image_path)
         .ok()
@@ -90,73 +144,61 @@ pub async fn update_image_metadata(
     app_handle: AppHandle,
     id: i64,
     patch: MetadataPatch,
-) -> PicOrgResult<ImageDetails> {
+) -> AppResult<ImageDetails> {
     tracing::info!(id, ?patch, "update_image_metadata");
-    apply_patch_and_write_sidecar(&services, &app_handle, id, &patch).await?;
-    // Refetch to include the updated meta_written_at / meta_read_at.
-    let details = queries::get_image(&services.db, id)?;
-    Ok(details)
+    apply_patch_and_persist(&services, &app_handle, id, &patch).await?;
+    let row = queries::get_image_row(&services.db, id)?;
+    Ok(enrich_details(services.inner(), row))
 }
 
-/// Applies a metadata patch to a single image: updates the DB, then writes
-/// the sidecar file synchronously. Emits `picorg://image-updated` on success.
-///
-/// Returns Err only if the DB update or the spawn_blocking join fails; a
-/// sidecar-write failure is logged and does NOT roll back the DB (the intent
-/// is that the user's edit is captured somewhere even if the source folder is
-/// read-only).
-async fn apply_patch_and_write_sidecar(
+async fn apply_patch_and_persist(
     services: &Arc<AppServices>,
     app_handle: &AppHandle,
     id: i64,
     patch: &MetadataPatch,
-) -> PicOrgResult<()> {
+) -> AppResult<()> {
     queries::apply_metadata_patch(&services.db, id, patch)?;
 
-    // Refetch to figure out the *final* metadata state and write it to disk.
-    let details = queries::get_image(&services.db, id)?;
+    let row = queries::get_image_row(&services.db, id)?;
+    let image_path = PathBuf::from(&row.summary.path);
 
-    let image_path = PathBuf::from(&details.summary.path);
     let subjects_opt = if patch.tags.is_some()
         || patch.tags_add.is_some()
         || patch.tags_remove.is_some()
     {
-        Some(details.tags.clone())
+        Some(row.tags.clone())
     } else {
         None
     };
     let title_opt = patch.title.clone();
-    let comment_opt = patch.comment.clone();
-    let rating_opt = patch.rating;
 
+    let registry = services.formats.clone();
     let write_path = image_path.clone();
     let write_res = tauri::async_runtime::spawn_blocking(move || {
-        meta_write::merge_and_write_sidecar(
+        meta_write::write_metadata_to_source(
+            &registry,
             &write_path,
             title_opt,
-            comment_opt,
-            rating_opt,
             subjects_opt,
         )
     })
     .await
-    .map_err(|e| crate::error::PicOrgError::Internal(format!("sidecar join: {e}")))?;
+    .map_err(|e| crate::error::AppError::Internal(format!("metadata write join: {e}")))?;
 
     match write_res {
         Ok(()) => {
             let now = chrono::Utc::now().timestamp_millis();
             let _ = queries::set_meta_written_at(&services.db, id, now);
-            // Refresh `meta_read_at` too so the FS-refresh check in get_image
-            // won't try to re-read a file we just wrote.
             let _ = queries::set_meta_read_at_now(&services.db, id);
             let _ = app_handle.emit(IMAGE_UPDATED_EVENT, id);
-            tracing::info!(id, ?image_path, "metadata + sidecar saved");
+            tracing::info!(id, ?image_path, "metadata embedded in source file");
+            Ok(())
         }
         Err(e) => {
-            tracing::warn!(?image_path, error = %e, "sidecar write failed");
+            tracing::warn!(?image_path, error = %e, "embed write failed");
+            Err(e)
         }
     }
-    Ok(())
 }
 
 #[tauri::command]
@@ -165,35 +207,29 @@ pub async fn batch_update_metadata(
     app_handle: AppHandle,
     ids: Vec<i64>,
     patch: MetadataPatch,
-) -> PicOrgResult<Vec<i64>> {
+) -> AppResult<Vec<i64>> {
     tracing::info!(count = ids.len(), ?patch, "batch_update_metadata");
     let services = services.inner().clone();
     let mut ok = Vec::with_capacity(ids.len());
     for id in ids {
-        match apply_patch_and_write_sidecar(&services, &app_handle, id, &patch).await {
+        match apply_patch_and_persist(&services, &app_handle, id, &patch).await {
             Ok(()) => ok.push(id),
             Err(e) => {
                 tracing::warn!(id, error = %e, "batch: apply failed");
             }
         }
     }
-    tracing::info!(
-        succeeded = ok.len(),
-        "batch_update_metadata completed"
-    );
+    tracing::info!(succeeded = ok.len(), "batch_update_metadata completed");
     Ok(ok)
 }
 
-/// Delete image files from disk (Recycle Bin by default) and remove them
-/// from the library index. Best-effort: partial failure returns per-file
-/// error details.
 #[tauri::command]
 pub async fn delete_images(
     services: State<'_, Arc<AppServices>>,
     app_handle: AppHandle,
     ids: Vec<i64>,
     #[allow(non_snake_case)] permanent: Option<bool>,
-) -> PicOrgResult<DeleteResult> {
+) -> AppResult<DeleteResult> {
     let permanent = permanent.unwrap_or(false);
     tracing::info!(count = ids.len(), permanent, "delete_images");
 
@@ -230,7 +266,7 @@ pub async fn delete_images(
         DeleteResult { deleted, failed }
     })
     .await
-    .map_err(|e| crate::error::PicOrgError::Internal(format!("delete join: {e}")))?;
+    .map_err(|e| crate::error::AppError::Internal(format!("delete join: {e}")))?;
 
     if !out.deleted.is_empty() {
         let _ = app_handle.emit(IMAGES_DELETED_EVENT, &out.deleted);
@@ -241,7 +277,6 @@ pub async fn delete_images(
 
 fn delete_one(path: &Path, permanent: bool) -> Result<(), String> {
     if !path.exists() {
-        // File already gone - still delete the sidecar and DB row.
         try_delete_sidecar(path, permanent);
         return Ok(());
     }

@@ -1,49 +1,50 @@
 # Keyboard shortcuts
 
-## Selection
+You can do everything in Magpie with a mouse, but keyboard shortcuts
+make the whole thing much faster once you know them.
 
-| Shortcut                       | Action                                            |
-| ------------------------------ | ------------------------------------------------- |
-| **Click**                      | Select one photo                                  |
-| **Ctrl + Click**               | Toggle a photo in the selection                   |
-| **Shift + Click**              | Extend selection from the last-clicked photo      |
-| **Ctrl + A**                   | Select every photo in the current filtered view   |
-| **Esc**                        | Clear selection                                   |
+## Picking files
 
-## Navigation
+| Shortcut                       | What it does                                    |
+| ------------------------------ | ----------------------------------------------- |
+| **Click**                      | Pick one file                                   |
+| **Ctrl + Click**               | Add or remove one file from your selection      |
+| **Shift + Click**              | Pick everything between the last click and this one |
+| **Ctrl + A**                   | Pick every file in the current view             |
+| **Esc**                        | Unpick everything                               |
 
-| Shortcut                       | Action                                            |
-| ------------------------------ | ------------------------------------------------- |
-| **↑ / ↓ / ← / →**              | Move the selection cursor in the grid             |
-| **Home / End**                 | Jump to the first / last photo in the view        |
-| **Page Up / Page Down**        | Jump one screen up / down                         |
+## Moving around
 
-## Metadata
+| Shortcut                       | What it does                                    |
+| ------------------------------ | ----------------------------------------------- |
+| **Arrow keys**                 | Move the cursor around the grid                 |
+| **Home / End**                 | Jump to the first / last file                   |
+| **Page Up / Page Down**        | Jump one screen up or down                      |
 
-| Shortcut                       | Action                                            |
-| ------------------------------ | ------------------------------------------------- |
-| **0**                          | Clear rating (equivalent to clicking the star again) |
-| **1**–**5**                    | Set rating 1..5 stars on the current selection    |
-| **Tab** (in title/comment)     | Commit and move focus to the next field           |
-| **Enter** (in tag input)       | Commit the current tag draft                      |
-| **Space** (in tag input)       | Commit the current tag draft                      |
-| **Comma** (in tag input)       | Commit the current tag draft                      |
-| **Backspace** (empty tag input)| Remove the last committed tag                     |
+## Titles and tags
 
-## Application
+| Shortcut                       | What it does                                    |
+| ------------------------------ | ----------------------------------------------- |
+| **Tab** (in the title)         | Save what you typed and move to the next field  |
+| **Enter** (in the tag box)     | Save the tag you just typed                     |
+| **Space** (in the tag box)     | Save the tag you just typed                     |
+| **Comma** (in the tag box)     | Save the tag you just typed                     |
+| **Backspace** (empty tag box)  | Remove the last tag you added                   |
 
-| Shortcut                       | Action                                            |
-| ------------------------------ | ------------------------------------------------- |
-| **Ctrl + F**                   | Focus the search box                              |
-| **Ctrl + R**                   | Rescan all library folders                        |
-| **Delete**                     | Move selection to Recycle Bin (with confirmation) |
-| **Shift + Delete**             | Permanently delete selection (with confirmation)  |
-| **F1**                         | Open the User Manual                              |
+## Everyday actions
+
+| Shortcut                       | What it does                                    |
+| ------------------------------ | ----------------------------------------------- |
+| **Ctrl + F**                   | Jump to the search box at the top               |
+| **Ctrl + R**                   | Refresh every folder in your library            |
+| **Delete**                     | Send the selected files to the Recycle Bin      |
+| **Shift + Delete**             | Delete the selected files permanently           |
+| **F1**                         | Open this manual                                |
 
 ## Layout
 
-| Shortcut                       | Action                                            |
-| ------------------------------ | ------------------------------------------------- |
-| **Ctrl + B**                   | Toggle the sidebar                                |
-| **Ctrl + D**                   | Toggle the details panel                          |
-| **F11**                        | Toggle full-screen                                |
+| Shortcut                       | What it does                                    |
+| ------------------------------ | ----------------------------------------------- |
+| **Ctrl + B**                   | Show or hide the left-hand sidebar              |
+| **Ctrl + D**                   | Show or hide the details panel on the right     |
+| **F11**                        | Full-screen mode (great for browsing)           |

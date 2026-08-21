@@ -1,76 +1,79 @@
 # Tags: adding, renaming, cleaning up
 
-Tags are the primary organisational tool in PicOrg. They are simple,
-flat strings — no hierarchy, no groups. Tag a photo `family`, `2024`,
-and `beach`, and later ask for "everything tagged `beach` and `2024`"
-in a couple of clicks.
+Tags are little labels you stick on files so you can find them
+later. There are no folders-inside-folders or complicated structures
+— tags are just words. A file can have as many as you want.
 
-## The tag sidebar
+Good tags are things you'd naturally think of later:
 
-Every tag in your library is listed under **Tags** in the sidebar,
-with a count of how many photos carry it. The list is sorted
-alphabetically.
-
-- **Click a tag** to filter the grid to only photos with that tag.
-- **Right-click** for tag maintenance:
-  - **Rename tag…** — updates every photo carrying that tag,
-    including their XMP sidecars and embedded XMP.
-  - **Delete tag** — removes the tag from every photo, but does not
-    delete any files.
+- **Places:** `Iceland`, `beach`, `home`.
+- **People:** `Emma`, `Grandad`, `the twins`.
+- **Events:** `wedding`, `Christmas-2024`, `hike`.
+- **Feelings:** `favourites`, `funny`, `to-print`.
 
 ## Adding tags
 
-The [Editing metadata](./editing-metadata.md) and
-[Working on many photos at once](./multi-select.md) chapters cover
-the two main entry points. In both cases:
+The most detailed walkthrough is in
+[Editing metadata](./editing-metadata.md#adding-tags). In short:
 
-- **Space** or **Enter** commits the current typed word as a tag.
-- **Comma** commits it too (useful if you're pasting a comma-separated
-  list).
-- **Backspace** on an empty input deletes the last committed tag.
-- Tags are case-insensitive. `Beach` and `beach` are the same tag.
+- Click the **Tags** box in the details panel.
+- Type a word.
+- Press **Space**, **Enter**, or **Comma** to save it.
 
-## Autocompletion
+Repeat as many times as you like. To **remove** a tag, click the
+little **×** on its pill.
 
-While typing a tag, PicOrg shows a dropdown with tags already in your
-library that match your prefix. Use <kbd>↑</kbd>/<kbd>↓</kbd> to
-select and <kbd>Enter</kbd> to accept — that keeps naming consistent
-across your library.
+Capital letters don't matter — `Beach` and `beach` are treated as
+the same tag.
 
-## Tag persistence
+## The tag list in the sidebar
 
-When you save a tag, PicOrg writes it to:
+Every tag you've ever used shows up in the **Tags** section of the
+sidebar on the left, in alphabetical order. Next to each tag is a
+number — how many files carry that tag.
 
-1. The photo's `.xmp` sidecar (`Photo.jpg` → `Photo.xmp`).
-2. The photo's embedded XMP inside the JPEG itself (for JPEG sources).
+- **Click a tag** to filter the grid to only files with that tag.
+- **Right-click a tag** for two options: **Rename** and **Delete**.
 
-That means:
+## Renaming a tag
 
-- Windows Explorer's *Details* → *Tags* column shows PicOrg's tags.
-- Adobe Lightroom, Bridge, and digiKam read PicOrg's tags and
-  vice-versa.
-- Files remain valid JPEG/PNG/etc — no format-level surprises.
+Made a typo? Change your mind on capitalisation? Right-click the tag
+and choose **Rename tag…**. Type the new name and confirm.
 
-## Renaming tags safely
+Magpie updates the tag on **every file that had it**, all at once.
+There's no per-file work to do.
 
-Right-click **Tags › `old-name`** → **Rename tag…**. PicOrg:
+## Deleting a tag
 
-1. Updates every affected photo's XMP.
-2. Rewrites the FTS search index so search finds the new spelling.
-3. Refreshes the sidebar counts.
+Right-click the tag → **Delete tag**. This removes the tag from every
+file — but it does not delete any files. Only the label goes.
 
-All in a single transaction — either the whole rename succeeds or none
-of it does.
+## Autocompletion — save yourself typos
 
-## Deleting a tag globally
+While you type a new tag, Magpie shows a small dropdown of tags
+you've used before that start with the same letters. Use the arrow
+keys to pick one and press Enter. This is the easiest way to keep
+your tag list tidy — no more `beach`, `beaches`, `beach`,
+`beach-day`.
 
-**Right-click a tag → Delete tag** removes the tag from every photo in
-the library. This is not the same as deleting photos — the files stay
-put, they just lose the tag.
+## Tips for tagging a big library
 
-## A note on Windows Explorer tags
+- **Start broad.** Tag by place or year first — `Iceland`, `2024`.
+  Once every file has broad tags, narrow ones (`glacier`, `Reykjavik`)
+  are easier because you can filter down first.
+- **Use multi-select.** [Ctrl + click](./multi-select.md) many files
+  and add tags to them all in one go.
+- **Don't over-tag.** A tag that's on 8,000 files isn't very useful.
+  When in doubt, pick tags that would show fewer than a few hundred
+  results.
 
-Windows Explorer stores tags in a Windows-specific `LastKeywordXMP`
-field alongside the standard `dc:subject`. PicOrg reads **both**, so
-tags added in Explorer show up in PicOrg. Tags added in PicOrg go into
-both fields, so they show up in Explorer too.
+## Do tags show up in other apps?
+
+For the formats Magpie can write into (JPEG, PNG, WebP, GIF), yes —
+tags are saved in the same standard XMP format that Windows Explorer,
+Adobe Lightroom, and other tools use. See
+[Interoperability with other tools](./interop.md) for the details.
+
+For read-only formats (RAW, HEIC, PDF, video, …) tags live in
+Magpie's library only. See
+[Supported file formats](./file-formats.md) for the current list.

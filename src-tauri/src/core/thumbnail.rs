@@ -1,5 +1,5 @@
 use crate::core::is_processable_by_image_crate;
-use crate::error::{PicOrgError, PicOrgResult};
+use crate::error::{AppError, AppResult};
 use crate::types::ThumbSize;
 use fast_image_resize::{images::Image as FirImage, PixelType, ResizeOptions, Resizer};
 use image::{codecs::webp::WebPEncoder, imageops, ImageEncoder, RgbaImage};
@@ -27,7 +27,7 @@ pub fn delete_thumbnails(cache_dir: &Path, image_id: i64) {
 
 /// Generate small + medium thumbnails for the image, if the format is decodable.
 /// This is best-effort — failures are logged but not fatal.
-pub fn ensure_thumbnails(cache_dir: &Path, src: &Path, image_id: i64) -> PicOrgResult<()> {
+pub fn ensure_thumbnails(cache_dir: &Path, src: &Path, image_id: i64) -> AppResult<()> {
     let ext = src
         .extension()
         .and_then(|s| s.to_str())
@@ -48,11 +48,11 @@ pub fn ensure_thumbnails(cache_dir: &Path, src: &Path, image_id: i64) -> PicOrgR
     }
 
     let img = image::ImageReader::open(src)
-        .map_err(|e| PicOrgError::ImageDecode(e.to_string()))?
+        .map_err(|e| AppError::ImageDecode(e.to_string()))?
         .with_guessed_format()
-        .map_err(|e| PicOrgError::ImageDecode(e.to_string()))?
+        .map_err(|e| AppError::ImageDecode(e.to_string()))?
         .decode()
-        .map_err(|e| PicOrgError::ImageDecode(e.to_string()))?;
+        .map_err(|e| AppError::ImageDecode(e.to_string()))?;
 
     let rgba = img.to_rgba8();
 
@@ -98,12 +98,12 @@ fn fit_within(w: u32, h: u32, target_max: u32) -> (u32, u32) {
     (nw.max(1), nh.max(1))
 }
 
-fn save_webp(img: &RgbaImage, path: &Path) -> PicOrgResult<()> {
+fn save_webp(img: &RgbaImage, path: &Path) -> AppResult<()> {
     let f = fs::File::create(path)?;
     let mut w = BufWriter::new(f);
     let encoder = WebPEncoder::new_lossless(&mut w);
     encoder
         .write_image(img.as_raw(), img.width(), img.height(), image::ExtendedColorType::Rgba8)
-        .map_err(|e| PicOrgError::ImageDecode(format!("webp encode: {e}")))?;
+        .map_err(|e| AppError::ImageDecode(format!("webp encode: {e}")))?;
     Ok(())
 }
