@@ -51,27 +51,27 @@ Success criteria:
                                         ▼ debounced 600ms
                      update_image_metadata IPC (Rust command)
                                         │
-                       ┌────────────────┴──────────────────┐
-                       ▼                                   ▼
-                Apply DB patch              Embed XMP in source file
-                                            (JPEG APP1 / PNG iTXt)
-                                            plus best-effort cleanup
-                                            of any legacy .xmp sidecar
-                       │                                   │
-                       └────────────────┬──────────────────┘
                                         ▼
-                     Update meta_read_at / meta_written_at
-                                │
-                                ▼
-              Emit "image-updated" event; frontend refreshes
+                    Unpack global ID → (folder_id, local_id)
+                                        │
+                                        ▼
+                    library::apply_metadata_patch inside the
+                    folder's library.db (single transaction:
+                    update title / tags / image_tags, rebuild
+                    FTS row, commit).
+                                        │
+                                        ▼
+              Emit "image-updated" event; frontend refreshes.
+              The source file is NOT touched.
 ```
 
 Success criteria:
 
 - No user input is ever lost to a debounce race.
-- A failure in any write step leaves the DB in a consistent state.
-- For writable formats, Windows Explorer sees the new tag/title
-  after refresh.
+- A failure in the DB write leaves the row exactly as it was
+  before (transactional rollback).
+- The source file's bytes remain byte-for-byte identical to what
+  the camera / editor originally produced.
 
 ### F3. Multi-select tag application
 
@@ -86,9 +86,9 @@ Success criteria:
                                                   │
                               ┌───────────────────┴──────────────────┐
                               ▼                                      ▼
-                    for each id (sequential):                Per-image failures
-                       apply DB patch                        are logged and
-                       embed XMP in source                   surfaced to user
+              Group by folder_id, then for each                 Per-image failures
+              folder: apply patch inside one txn                are logged and
+              on that folder's library.db.                      surfaced to user
                               │                                      │
                               └────────────┬─────────────────────────┘
                                            ▼
@@ -118,14 +118,14 @@ Success criteria:
    (User re-selects photo, or clicks Rescan)
                        │
                        ▼
-          get_image checks: file (or legacy sidecar)
-                                mtime > meta_read_at?
+          get_image checks: file mtime > row.mtime_ms?
                        │  yes
                        ▼
-          read_all() re-reads embedded XMP (+ legacy sidecar)
+          read_all() re-reads embedded XMP + Shell keywords
                        │
                        ▼
-          resync_user_meta_from_fs updates DB
+          library::set_image_meta writes the fresh row into
+          the folder's library.db
                        │
                        ▼
                     UI refreshes

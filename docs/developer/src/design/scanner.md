@@ -2,10 +2,14 @@
 
 ## Objective
 
-Given a library folder path, populate the `images` table with a
-row per supported image file, extract metadata, generate
-thumbnails, and keep the DB in sync with the filesystem on
-subsequent runs — all while staying responsive.
+Given a library folder path, populate `magpie.db` with a row per
+supported file, extract metadata, generate thumbnails, and keep the
+DB in sync with the filesystem on subsequent runs — all while
+staying responsive.
+
+Every path stored in the DB is **folder-relative** (forward
+slashes). The scanner joins root + relative path when it needs the
+actual filesystem location.
 
 ## Pipeline
 
@@ -43,18 +47,25 @@ denominator but otherwise do no work.
 
 ## Stage 3 — diff
 
-For each kept entry, Magpie looks up the path in `images`:
+For each kept entry, Magpie looks up the *folder-relative* path in
+the `images` table:
 
 ```
-SELECT id, mtime_ms FROM images WHERE path = ?1
+SELECT id, mtime_ms FROM images
+ WHERE folder_id = ?1 AND rel_path = ?2
 ```
+
+Leftover `.magpie/library.db` files from a failed migration off the
+previous per-folder layout are excluded from the walk so the scanner
+doesn't try to import them.
 
 - **New file** (no row): full extract required.
 - **Existing, mtime unchanged**: skip.
 - **Existing, mtime changed**: partial re-extract
   (metadata + hash), leaving other columns intact.
 
-The lookup is O(log n) thanks to the UNIQUE index on `images.path`.
+The lookup is O(log n) thanks to the UNIQUE index on
+`(folder_id, rel_path)`.
 
 ## Stage 4 — extract
 
@@ -79,36 +90,22 @@ missing fields are left NULL.
 
 ## Stage 5 — upsert
 
-The DB is the single writer. To amortise transaction overhead,
-extracted rows are pushed to a bounded channel; a single "writer
-task" drains the channel and commits batches of up to 128 rows in
-one transaction:
+The central `magpie.db` is the single writer. Scanner tasks take
+short borrows of the `Db` mutex — one upsert per statement — so
+scan work interleaves with UI queries without long-lived locks.
 
-```rust
-let tx = conn.transaction()?;
-for row in batch { upsert_image(&tx, &row)?; }
-tx.commit()?;
-```
-
-The `upsert_image` SQL is:
+The upsert uses `(folder_id, rel_path)` as the conflict key:
 
 ```sql
-INSERT INTO images (path, folder_id, filename, ext, size_bytes, mtime_ms,
-                    width, height, content_hash, taken_at,
-                    camera_make, camera_model, title,
-                    meta_read_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-ON CONFLICT(path) DO UPDATE SET
-    size_bytes    = excluded.size_bytes,
-    mtime_ms      = excluded.mtime_ms,
-    width         = excluded.width,
-    height        = excluded.height,
-    content_hash  = excluded.content_hash,
-    taken_at      = excluded.taken_at,
-    camera_make   = excluded.camera_make,
-    camera_model  = excluded.camera_model,
-    title         = excluded.title,
-    meta_read_at  = excluded.meta_read_at;
+INSERT INTO images (folder_id, rel_path, filename, ext,
+                    size_bytes, mtime_ms, imported_at, missing)
+VALUES (?, ?, ?, ?, ?, ?, ?, 0)
+ON CONFLICT(folder_id, rel_path) DO UPDATE SET
+    filename    = excluded.filename,
+    ext         = excluded.ext,
+    size_bytes  = excluded.size_bytes,
+    mtime_ms    = excluded.mtime_ms,
+    missing     = 0;
 ```
 
 After the row lands, tags are reconciled: everything in `image_tags`
@@ -126,7 +123,9 @@ priority so they don't starve extraction.
 `ensure_thumbnails(cache_dir, src_path, image_id)`:
 
 1. For each size (small, medium):
-   - Path = `cache_dir / "<id>-<size>.webp"`.
+   - Path = `cache_dir / "<image_id>-<size>.webp"`. `image_id` is
+     the plain `images.id` primary key — globally unique because
+     Magpie has a single central DB.
    - Skip if the thumbnail's mtime ≥ the source's mtime.
 2. Decode the source with `image::open`.
 3. Resize with `fast_image_resize::Resizer` (Lanczos3, SIMD).

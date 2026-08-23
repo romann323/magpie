@@ -69,14 +69,13 @@ tail of `app.log`.
 | Signal                                         | Level  | Emitted by                                                       |
 | ---------------------------------------------- | ------ | ---------------------------------------------------------------- |
 | App started / logging initialised              | INFO   | `lib.rs::init_logging`, `lib.rs` main run                        |
-| Migration applied                              | INFO   | `db/migrations.rs::run`                                          |
+| Legacy layout migrated into magpie.db          | INFO   | `db/migrate.rs::open_or_migrate`                                 |
+| Folder registered                              | INFO   | `commands/library.rs::add_library_folder`                        |
+| Folder root unreachable (drive unplugged)      | WARN   | `commands/library.rs::list_library_folders`                      |
 | Command entry (`update_image_metadata`, …)     | INFO   | Each Tauri command that mutates state                            |
 | `get_image` FS-refresh triggered               | INFO   | `commands/images.rs::get_image`                                  |
-| Embedded XMP write failed                      | WARN   | `commands/images.rs::apply_patch_and_persist`                    |
-| Unsupported format for embed                   | WARN   | `core/metadata/write.rs::write_metadata_to_source`               |
-| Legacy sidecar cleanup failed                  | WARN   | `core/metadata/write.rs::write_metadata_to_source`               |
 | Scan errors (unreadable file, permission)      | WARN   | `core/scanner.rs`                                                |
-| DB migration or startup errors                 | ERROR  | `db/mod.rs`, `lib.rs::run`                                       |
+| DB errors (mutex poisoned, statement failed)   | ERROR  | `db/mod.rs`, `db/queries.rs`, `lib.rs::run`                      |
 | Frontend applyTags dispatch                    | INFO   | `features/DetailsPanel.tsx::MultiDetails.applyTags`              |
 
 ## Log rotation

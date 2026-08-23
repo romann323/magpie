@@ -26,8 +26,8 @@ export function TopBar() {
         title: 'Select a folder to add to your library',
       })
       if (!picked) return null
-      const path = typeof picked === 'string' ? picked : picked
-      return addLibraryFolder(path as string)
+      const path = typeof picked === 'string' ? picked : (picked as string)
+      return addLibraryFolder(path)
     },
     onSuccess: (result) => {
       if (result) {

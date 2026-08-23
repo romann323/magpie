@@ -1,13 +1,12 @@
 //! Utilities shared by every [`FormatHandler`]:
 //!
-//! - Atomic file replace (write to `<path>.<WRITE_TMP_SUFFIX>` and rename).
 //! - EXIF → [`TechnicalMeta`] mapping (used by JPEG, PNG-with-eXIf, WebP,
 //!   TIFF, HEIC, etc.).
 //! - Image dimensions via the `image` crate.
+//! - Windows verbatim path (`\\?\`) normalisation for the Shell property
+//!   system fallback used on first scan.
 
 pub use super::TechnicalMeta;
-use crate::error::{AppError, AppResult};
-use crate::paths::WRITE_TMP_SUFFIX;
 use chrono::{NaiveDateTime, TimeZone, Utc};
 use std::fs::File;
 use std::io::BufReader;
@@ -88,39 +87,6 @@ mod strip_tests {
         let vg = r"\\?\Volume{12345678-1234-1234-1234-1234567890ab}\file.jpg";
         assert_eq!(strip_windows_verbatim_prefix(vg), PathBuf::from(vg));
     }
-}
-
-/// Atomic file replace: write to a temp file next to `path`, then rename over
-/// the original. Renames within a single volume are atomic on both Windows
-/// (via MoveFileEx replace-existing) and POSIX.
-pub fn atomic_write_bytes(path: &Path, bytes: &[u8]) -> AppResult<()> {
-    use std::io::Write;
-    let tmp = {
-        let file_name = path
-            .file_name()
-            .ok_or_else(|| AppError::MetadataWrite("no file name".into()))?
-            .to_owned();
-        let mut tmp_name = file_name;
-        tmp_name.push(WRITE_TMP_SUFFIX);
-        path.with_file_name(tmp_name)
-    };
-    {
-        let mut f = std::fs::File::create(&tmp).map_err(|e| {
-            AppError::MetadataWrite(format!("create {}: {e}", tmp.display()))
-        })?;
-        f.write_all(bytes)
-            .map_err(|e| AppError::MetadataWrite(format!("write {}: {e}", tmp.display())))?;
-        f.sync_all().ok();
-    }
-    std::fs::rename(&tmp, path).map_err(|e| {
-        let _ = std::fs::remove_file(&tmp);
-        AppError::MetadataWrite(format!(
-            "rename {} → {}: {e}",
-            tmp.display(),
-            path.display()
-        ))
-    })?;
-    Ok(())
 }
 
 /// Read pixel dimensions using the `image` crate. Returns `None` for formats
@@ -311,11 +277,3 @@ pub fn append_file_basics(tech: &mut TechnicalMeta, path: &Path) {
     }
 }
 
-/// Error the read-only handlers return when a caller tries to persist tags.
-pub fn write_not_supported_error(format_label: &str) -> AppError {
-    AppError::MetadataWrite(format!(
-        "{format_label} files can't yet store {} tags inside the file. \
-         Supported for tag writing: JPEG, PNG, WebP, GIF89a.",
-        crate::brand::PRODUCT_NAME,
-    ))
-}

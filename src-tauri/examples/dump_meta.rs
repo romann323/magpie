@@ -1,15 +1,18 @@
-//! Diagnostic tool: dumps every metadata field the format-handler registry
-//! can extract from a file.
+//! Diagnostic tool: dumps every metadata field the format-handler
+//! registry can extract from a file. Read-only — Magpie never writes
+//! back into source files.
 //!
 //! Usage:
 //!     cargo run -q --example dump_meta -- "C:\path\to\photo.jpg"
 //!
-//! With no arguments, prints the first few rows of the release DB and runs
-//! the registry on each.
+//! With no arguments, prints the first few rows from magpie.db
+//! (assuming Magpie has been launched at least once so the DB exists)
+//! and runs the registry on each row's file.
 
 use desktop_lib::core::formats::FormatRegistry;
 use desktop_lib::core::metadata::read as meta_read;
 use desktop_lib::core::metadata::sidecar::sidecar_path_for;
+use desktop_lib::db;
 use std::path::PathBuf;
 
 fn main() {
@@ -46,9 +49,8 @@ fn dump_one(registry: &FormatRegistry, path: &std::path::Path) {
     let handler = registry.for_ext(ext);
     match handler {
         Some(h) => println!(
-            "Handler: name={}  can_write_tags={}  extensions={:?}",
+            "Handler: name={}  extensions={:?}",
             h.name(),
-            h.can_write_tags(),
             h.extensions()
         ),
         None => println!("Handler: (none — unrecognised extension `{}`)", ext),
@@ -89,40 +91,49 @@ fn dump_first_rows_from_db(registry: &FormatRegistry) {
     let db_path = dirs::data_dir()
         .expect("data dir")
         .join("com.magpie.app")
-        .join("library.db");
-    println!("DB path: {}", db_path.display());
+        .join(db::DB_FILE_NAME);
+    println!("Magpie DB path: {}", db_path.display());
     println!("  exists = {}", db_path.exists());
     if !db_path.exists() {
         return;
     }
-    let conn = rusqlite::Connection::open(&db_path).expect("open DB");
-    let mut stmt = conn
-        .prepare(
-            "SELECT id, path, title,
-                    (SELECT GROUP_CONCAT(t.name, ',')
-                     FROM tags t JOIN image_tags it ON it.tag_id = t.id
-                     WHERE it.image_id = images.id) AS tags,
-                    meta_read_at, meta_written_at
-             FROM images
-             ORDER BY id ASC
-             LIMIT 20",
-        )
-        .expect("prepare");
-    let rows = stmt
-        .query_map([], |row| {
-            Ok((
-                row.get::<_, i64>(0)?,
-                row.get::<_, String>(1)?,
-                row.get::<_, Option<String>>(2)?,
-                row.get::<_, Option<String>>(3)?,
-                row.get::<_, Option<i64>>(4)?,
-                row.get::<_, Option<i64>>(5)?,
-            ))
-        })
-        .expect("query");
-    for r in rows.flatten() {
-        println!("id={}  path={}  title={:?}  tags={:?}", r.0, r.1, r.2, r.3);
-        println!("     meta_read_at={:?}  meta_written_at={:?}", r.4, r.5);
-        dump_one(registry, std::path::Path::new(&r.1));
+
+    let db = db::Db::open(&db_path).expect("open db");
+    let folders = db.with_conn(db::queries::list_folders).expect("folders");
+
+    for f in folders {
+        println!("---- folder {} @ {} ----", f.id, f.path);
+        let rows = db
+            .with_conn(|conn| {
+                let mut stmt = conn.prepare(
+                    "SELECT id, rel_path, title,
+                            (SELECT GROUP_CONCAT(t.name, ',')
+                             FROM tags t JOIN image_tags it ON it.tag_id = t.id
+                             WHERE it.image_id = images.id) AS tags
+                     FROM images
+                     WHERE folder_id = ?1
+                     ORDER BY id ASC
+                     LIMIT 5",
+                )?;
+                let rows = stmt.query_map(rusqlite::params![f.id], |row| {
+                    Ok((
+                        row.get::<_, i64>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, Option<String>>(2)?,
+                        row.get::<_, Option<String>>(3)?,
+                    ))
+                })?;
+                Ok(rows.collect::<Result<Vec<_>, _>>()?)
+            })
+            .expect("query images");
+
+        for r in rows {
+            let abs = std::path::PathBuf::from(&f.path).join(&r.1);
+            println!(
+                "  id={}  rel={}  title={:?}  tags={:?}",
+                r.0, r.1, r.2, r.3
+            );
+            dump_one(registry, &abs);
+        }
     }
 }

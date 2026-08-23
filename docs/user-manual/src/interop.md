@@ -1,71 +1,49 @@
 # Working with other tools
 
-Your tags and titles aren't locked inside Magpie. For file formats
-Magpie can write into (JPEG, PNG, WebP, GIF), Magpie saves them the
-standard way — inside the file itself — so other tools can read
-them too, and Magpie can read tags added by other tools.
+Magpie keeps your tags in its own database, not inside the files
+themselves. That has two implications for other tools:
 
-## Windows Explorer
+- **The files themselves are never modified.** Every viewer and
+  editor on your PC sees exactly the bytes the camera (or Photoshop,
+  or Lightroom) originally produced.
+- **Tags don't automatically sync between Magpie and Explorer /
+  Lightroom.** If you want them to end up in the file, you'll need
+  to write them out with the other tool as before — Magpie won't do
+  that automatically.
 
-- **Tags you add in Magpie show up in Explorer.** Right-click a
-  file → **Properties** → **Details** tab. Your tags are in the
-  *Tags* row and your title in *Title*.
-- **Tags you add in Explorer show up in Magpie.** After you type a
-  tag in Explorer's Details tab, click **Rescan** in Magpie (or
-  wait for the next time you click that file). The tag appears.
+## Importing existing tags
 
-> **Note.** Explorer caches things aggressively. If a tag you just
-> added isn't showing, press F5 in the folder or navigate away and
-> back.
+If a photo already has tags in it (added earlier by Lightroom,
+Bridge, or the *Properties → Details* dialog in Explorer, or an
+older version of Magpie), Magpie **reads them once** on the first
+scan of that folder and imports them into its database.
 
-## Windows Photos app
+- XMP `dc:subject`, Microsoft-Photo `MP:LastKeywordXMP`, and Windows
+  Shell `System.Keywords` are all recognised.
+- The imported title comes from XMP `dc:title` or `System.Title`.
 
-The built-in Photos app reads titles that Magpie wrote. Not all
-metadata is editable there, but you'll see it.
+After that first-scan import, Magpie treats its database as the
+truth. Later edits you make in Lightroom, Bridge, or Explorer will
+**not** show up in Magpie until you re-import the folder.
 
-## Adobe Lightroom, Adobe Bridge, digiKam
+## Refreshing after external edits
 
-These are photo tools used by pros and enthusiasts. All of them
-read the same XMP tag/title format Magpie uses. So a library you
-tag in Magpie opens up in Lightroom with everything already
-labelled — and vice versa. Any star ratings or captions those tools
-wrote are **preserved** by Magpie when it saves your edits, even
-though the current Magpie UI doesn't show them.
+If you know a file was retagged outside Magpie and want to bring
+those tags back in, the simplest path is:
 
-Some tools cache their view of a folder. If your changes aren't
-appearing, use the "refresh" or "reload metadata" option in the
-other tool.
+1. **Remove** the folder from Magpie (right-click it in the sidebar →
+   *Remove from library*). Your files aren't touched.
+2. **Add** the folder again. The first-scan import runs and picks
+   up the current XMP / Explorer keywords for every file.
 
-## Other tools
-
-Many smaller viewers (XnView, FastStone, IrfanView, and so on) can
-read tags in this standard format too. If your tool has a "read XMP
-metadata" option, turn it on.
-
-## What if I tag a RAW file, HEIC, PDF, or video?
-
-Some file formats don't have a safe standard way for Magpie to embed
-tags inside them yet, so **for these files Magpie stores your tags
-in its own library only**. The tag will still appear in Magpie —
-the file itself is left untouched.
-
-See [Supported file formats](./file-formats.md) for the full
-read-only list. If you shoot RAW+JPEG, Magpie can tag the JPEG
-version instead, and those tags are then visible in Windows
-Explorer, Lightroom, and every other standard tool.
-
-## Migrating from an older Magpie or Lightroom
-
-Earlier Magpie versions (and Adobe Lightroom for RAW files) sometimes
-left small `.xmp` companion files next to your files. Magpie still
-reads those on first scan, so you keep your existing tags — but the
-first time you save an edit, Magpie embeds the tags into the file
-itself and removes the leftover `.xmp`. From that point on, the file
-is the only place your tags live.
+Anything you'd added *only* inside Magpie for that folder will be
+lost by this step, because Magpie doesn't write tags back into the
+files. Use it only when the external tool is the authoritative
+source.
 
 ## In short
 
-If your other tool speaks the standard XMP metadata language (and
-almost every modern one does), it reads and writes the same tags and
-titles Magpie does — as long as the file format allows embedded XMP.
-You can move between tools freely without losing your work.
+- Magpie doesn't fight other tools for control of your files.
+- If Magpie is your primary tagging tool, everything just works.
+- If your other tool is primary and you want its tags in Magpie,
+  re-import that folder from time to time.

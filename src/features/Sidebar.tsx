@@ -67,12 +67,25 @@ export function Sidebar() {
         {folders.data?.map((f) => (
           <div key={f.id} className="group flex items-center">
             <SidebarItem
-              className="flex-1"
-              label={folderLabel(f.path)}
+              className={clsx('flex-1', !f.isAvailable && 'opacity-60')}
+              label={
+                f.isAvailable ? (
+                  folderLabel(f.path)
+                ) : (
+                  <span title="Folder is not reachable right now">
+                    {folderLabel(f.path)}{' '}
+                    <span className="text-amber-400">(offline)</span>
+                  </span>
+                )
+              }
               badge={f.imageCount ? String(f.imageCount) : undefined}
               active={view.kind === 'folder' && view.id === f.id}
               onClick={() => setView({ kind: 'folder', id: f.id })}
-              title={f.path}
+              title={
+                f.isAvailable
+                  ? f.path
+                  : `${f.path}\n\nThis folder's Magpie library is not reachable right now. Reconnect the drive and rescan to bring it back.`
+              }
             />
             <button
               className="btn-icon opacity-0 group-hover:opacity-100 shrink-0"

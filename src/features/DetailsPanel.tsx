@@ -197,7 +197,6 @@ function SingleDetails({ id, onClose }: { id: number; onClose: () => void }) {
           onKeyDown={(e) => {
             if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
           }}
-          disabled={!d.canWriteTags}
         />
       </Section>
 
@@ -210,7 +209,10 @@ function SingleDetails({ id, onClose }: { id: number; onClose: () => void }) {
             void applyPatch({ tags: next }, 'tags')
           }}
         />
-        <WriteCapabilityHint d={d} />
+        <div className="text-[11px] text-slate-500 mt-1">
+          Saved in this folder's Magpie library. The original file is not
+          modified.
+        </div>
         {saveError && (
           <div className="text-[11px] text-red-300 mt-1 whitespace-pre-wrap">
             Save failed: {saveError}
@@ -248,45 +250,11 @@ function SingleDetails({ id, onClose }: { id: number; onClose: () => void }) {
           {deleteMutation.isPending ? 'Deleting…' : 'Delete file'}
         </button>
         <div className="text-[11px] text-slate-500 mt-1 text-center">
-          Moves to Recycle Bin. Legacy .xmp sidecar files are also removed.
+          Moves to Recycle Bin. Tags and title are also cleared from the
+          library.
         </div>
       </div>
     </aside>
-  )
-}
-
-/**
- * Inline hint under the tag editor explaining *where* the tags will be
- * saved. Three distinct states, mirroring the backend `WriteMode` enum:
- *   - `native`      – embedded by our own handler (XMP/iTXt/EXIF)
- *   - `shell`       – written via Windows Shell property system
- *   - `libraryOnly` – no writable path; stays in the Magpie index
- */
-function WriteCapabilityHint({ d }: { d: ImageDetails }) {
-  const ext = d.ext.toUpperCase()
-  if (d.writeMode === 'native') {
-    return (
-      <div className="text-[11px] text-slate-500 mt-1">
-        Title and tags are embedded directly into the {ext} file (XMP).
-        Windows Explorer, Adobe Bridge and other XMP-aware tools will see
-        them.
-      </div>
-    )
-  }
-  if (d.writeMode === 'shell') {
-    return (
-      <div className="text-[11px] text-slate-500 mt-1">
-        Title and tags are saved on the source file via the same Windows
-        property system that Explorer's <em>Properties → Details</em> tab
-        uses.
-      </div>
-    )
-  }
-  return (
-    <div className="text-[11px] text-amber-300/80 mt-1">
-      Windows has no property handler that can embed tags in {ext} files on
-      this system, so tags are stored in Magpie's library only.
-    </div>
   )
 }
 
@@ -297,10 +265,7 @@ function ReadOnlyList({ d }: { d: ImageDetails }) {
     ['Size', formatBytes(d.sizeBytes)],
     ['Format', d.ext.toUpperCase()],
     ['Modified', new Date(d.mtimeMs).toLocaleString()],
-    [
-      'Metadata saved',
-      d.metaWrittenAt ? new Date(d.metaWrittenAt).toLocaleString() : 'never',
-    ],
+    ['Imported', new Date(d.importedAt).toLocaleString()],
   ]
   const techRows: [string, string | null][] = (d.technical ?? []).map(
     ([k, v]) => [k, v],
@@ -456,7 +421,8 @@ function MultiDetails({ ids, onClose }: { ids: number[]; onClose: () => void }) 
           {deleteMutation.isPending ? 'Deleting…' : `Delete ${ids.length} files`}
         </button>
         <div className="text-[11px] text-slate-500 mt-1 text-center">
-          Moves files to Recycle Bin. Legacy .xmp sidecar files are also removed.
+          Moves files to Recycle Bin. Tags and titles are also cleared
+          from the library.
         </div>
       </div>
     </aside>

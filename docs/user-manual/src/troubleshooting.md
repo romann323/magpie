@@ -18,15 +18,19 @@ it; Windows 10 usually gets it automatically through Windows Update.
 ## Tags I added in File Explorer don't show up in Magpie
 
 **What happens:** You right-click a file in File Explorer, add a
-tag under **Properties › Details**, but Magpie's sidebar doesn't
-list it.
+tag under **Properties › Details**, but Magpie doesn't list it.
 
-**Why:** Magpie only re-reads tags when you tell it to (or when you
-click the file). It doesn't watch your folders in the background.
+**Why:** Magpie's tag data lives in its own database, not inside
+the file. Explorer edits go into the file. Magpie reads those file
+tags **once**, on first scan of the folder, and then treats its
+database as the source of truth.
 
-**Fix:** Click **Rescan** at the top of Magpie, or right-click the
-folder in the sidebar and choose **Rescan folder**. The tag will
-appear.
+**Fix:** Right-click the folder in the sidebar and choose **Remove
+from library**, then add the folder again. The first scan re-imports
+whatever tags Explorer, Bridge, or Lightroom have put in the files.
+Any tags you'd already added in Magpie for that folder are lost by
+this step, so use it only when the other tool is the authoritative
+tagger.
 
 ---
 
@@ -35,18 +39,14 @@ appear.
 **What happens:** You add a tag in Magpie, open the file's
 properties in File Explorer, and the Tags row is empty.
 
-**Fixes to try, in order:**
+**Why:** Magpie doesn't write into your files. Tags live only in
+Magpie's database.
 
-1. **Refresh the Explorer window.** Press **F5** or navigate away and
-   back. Explorer likes to hold onto old data.
-2. **Check the file format.** Only formats that Magpie can write into
-   propagate tags to Explorer — see
-   [Supported file formats](./file-formats.md). Convert to JPEG or
-   PNG if you need Explorer to see the tag.
-3. **Check the folder isn't read-only.** If the folder is on a
-   read-only drive (like a locked backup), Magpie can't save inside
-   the file. Right-click the folder → **Properties** and make sure
-   *Read-only* is off.
+**If you need the tag inside the file** (for example so it survives
+being sent to a friend by email), tag the file with Explorer's
+*Properties → Details* dialog directly, or with a tool like Adobe
+Bridge / digiKam that writes XMP. Magpie will pick that tag up the
+next time you re-add the folder to import fresh.
 
 ---
 
@@ -66,6 +66,21 @@ properties in File Explorer, and the Tags row is empty.
 
 ---
 
+## The folder shows "(offline)" in the sidebar
+
+**What happens:** A folder that used to work now appears greyed-out
+with an *(offline)* label.
+
+**Why:** Magpie couldn't reach the folder on disk. Usually this is
+because the drive is unplugged (external disk) or a network share
+is not reachable right now.
+
+**Fix:** Plug the drive back in / reconnect to the network share.
+Click **Rescan** at the top of the window. The folder should come
+back online.
+
+---
+
 ## The app is slow / the grid stutters
 
 **What to try:**
@@ -82,40 +97,21 @@ properties in File Explorer, and the Tags row is empty.
 
 ## "Save failed" message
 
-**What happens:** After clicking **Apply tag changes to N files**,
-a red **Save failed** message pops up.
+**What happens:** After adding a tag, a red **Save failed** message
+appears in the details panel.
 
-**Fix:** Two common causes:
+**Fix:** Most common causes:
 
-1. **Folder permissions.** One of the files lives on a network
-   drive or locked backup. Check that you can write to that folder
-   in File Explorer, then try again.
-2. **The file is in a format Magpie can't tag inside yet.** For
-   those, the tag lives in Magpie's library only, but the batch
-   won't show a red error — it just skips the file with a note.
+1. **Disk full.** The database is tiny but SQLite needs a few
+   kilobytes free to write.
+2. **Another Magpie window is running.** Close the other instance
+   and try again — only one Magpie can safely write to the database
+   at a time on the same PC.
+3. **File permissions on `%APPDATA%`.** Very unusual. If your
+   Windows account can't write to its own `AppData\Roaming` folder,
+   most apps won't work.
 
-The log file (see below) will tell you exactly which file failed.
-
----
-
-## "This format can't store Magpie tags inside the file"
-
-**What happens:** You try to edit a `.cr2` RAW file or a `.heic`
-photo and get this message.
-
-**Why:** Only a handful of image formats (JPEG, PNG, WebP, GIF89a)
-have a safe, standard way to embed tags. Magpie won't create hidden
-`.xmp` companion files, so if it can't put your edit *inside* the
-file, it won't pretend to save it there.
-
-**Workarounds:**
-
-- Tag the file anyway — it works. The tag is remembered in Magpie's
-  library. It just won't travel with the file to another computer.
-- Or convert (or export a copy of) the file to JPEG/PNG/WebP/GIF and
-  tag that copy.
-- If you shoot RAW+JPEG, tag the JPEG version — Lightroom, Bridge,
-  and other tools will read those tags too.
+The log file (see below) will tell you exactly what went wrong.
 
 ---
 
@@ -126,14 +122,15 @@ If Magpie gets into a weird state and you want to start fresh:
 1. Close Magpie.
 2. Open File Explorer, paste `%APPDATA%\com.magpie.app` into the
    address bar, and press Enter.
-3. Delete that folder.
-4. Reopen Magpie — it starts empty and you can add your folders
-   again.
+3. Delete `magpie.db` (or the whole folder — everything else can be
+   regenerated).
+4. Reopen Magpie. You start with an empty library; re-add your
+   folders. Any tags that were embedded in the files themselves (by
+   Explorer, Bridge, or Lightroom) come back automatically on first
+   scan. Tags you'd only added inside Magpie are gone.
 
-**Your files and any tags saved inside them are all safe** — those
-live in your folders, not in the folder you just deleted. Tags that
-Magpie only kept in its own library are lost, so this is a proper
-reset.
+Tip: before step 3, copy `magpie.db` somewhere safe. That single
+file is your whole library backup.
 
 ---
 

@@ -1,23 +1,28 @@
 //! Prints how many images (and which) are tagged with the tag named in
-//! the `MAGPIE_QUERY_TAG` env var. Used by `scripts/test-multiselect-tag.ps1`
-//! to verify that a batch tag save actually landed in the DB.
+//! the `MAGPIE_QUERY_TAG` env var. Used by
+//! `scripts/test-multiselect-tag.ps1` to verify that a batch tag save
+//! actually landed in the DB.
 
 fn main() {
-    // Old name kept as a fallback for compatibility with older invocations.
     let tag = std::env::var("MAGPIE_QUERY_TAG")
         .or_else(|_| std::env::var("PICORG_QUERY_TAG"))
         .unwrap_or_default();
     let db_path = dirs::data_dir()
         .expect("data dir")
         .join("com.magpie.app")
-        .join("library.db");
-    println!("DB: {}", db_path.display());
+        .join(desktop_lib::db::DB_FILE_NAME);
+    println!("Magpie DB: {}", db_path.display());
     if tag.is_empty() {
         println!("(no MAGPIE_QUERY_TAG set)");
         return;
     }
-    let conn = rusqlite::Connection::open(&db_path).expect("open DB");
-    let count: i64 = conn
+    if !db_path.exists() {
+        println!("(magpie.db missing — launch Magpie once first)");
+        return;
+    }
+
+    let db = rusqlite::Connection::open(&db_path).expect("open db");
+    let total: i64 = db
         .query_row(
             "SELECT COUNT(*)
              FROM image_tags it
@@ -26,38 +31,33 @@ fn main() {
             [&tag],
             |r| r.get(0),
         )
-        .unwrap_or(-1);
-    println!("Tag '{tag}' is applied to {count} images");
+        .unwrap_or(0);
+    println!("Tag '{tag}' is applied to {total} images total\n");
+    if total == 0 {
+        return;
+    }
 
-    let mut stmt = conn
+    let mut stmt = db
         .prepare(
-            "SELECT i.id, i.path
+            "SELECT i.id, f.path, i.rel_path
              FROM images i
              JOIN image_tags it ON it.image_id = i.id
              JOIN tags t ON t.id = it.tag_id
+             JOIN library_folders f ON f.id = i.folder_id
              WHERE t.name = ?1 COLLATE NOCASE
-             ORDER BY i.id",
+             ORDER BY f.id, i.id",
         )
         .expect("prep");
     let rows = stmt
         .query_map([&tag], |r| {
-            Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?))
+            Ok((
+                r.get::<_, i64>(0)?,
+                r.get::<_, String>(1)?,
+                r.get::<_, String>(2)?,
+            ))
         })
         .expect("query");
     for r in rows.flatten() {
-        println!("  id={} path={}", r.0, r.1);
-
-        let sidecar = std::path::PathBuf::from(&r.1).with_extension("xmp");
-        if sidecar.exists() {
-            let body = std::fs::read_to_string(&sidecar).unwrap_or_default();
-            let contains = body.contains(&tag);
-            println!(
-                "    sidecar exists ({} bytes), contains tag = {}",
-                body.len(),
-                contains
-            );
-        } else {
-            println!("    sidecar missing at {}", sidecar.display());
-        }
+        println!("  id={}  {}", r.0, std::path::PathBuf::from(&r.1).join(&r.2).display());
     }
 }

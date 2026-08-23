@@ -1,8 +1,12 @@
 # Tauri command reference
 
 Every command below is registered in `src-tauri/src/lib.rs` inside
-`tauri::generate_handler![…]`. All are `async fn`, return
-`AppResult<T>`, and use camelCase JSON on the wire.
+`tauri::generate_handler![…]`. Signatures use `AppResult<T>` and
+camelCase JSON on the wire.
+
+> **IDs.** Every `id: i64` an image command accepts or returns is the
+> plain `images.id` primary key. It's globally unique because Magpie
+> has a single central DB.
 
 ## Library management
 
@@ -16,8 +20,8 @@ async fn add_library_folder(
 ) -> AppResult<LibraryFolder>;
 ```
 
-Add a folder to the library and start a background scan. Emits
-`app://scan` progress events. Returns the created row.
+Canonicalise the path, insert a row into `library_folders`, and
+spawn a background scan. Emits `app://scan` progress events.
 
 ### `remove_library_folder`
 
@@ -28,8 +32,10 @@ async fn remove_library_folder(
 ) -> AppResult<()>;
 ```
 
-Removes the folder row (CASCADE removes every image and image_tags
-row). Files on disk are untouched.
+Delete the `library_folders` row. Because `images.folder_id` has
+`ON DELETE CASCADE`, all image rows, `image_tags`, and FTS rows for
+that folder are removed in the same transaction. **Source files on
+disk are untouched.**
 
 ### `list_library_folders`
 
@@ -38,6 +44,10 @@ async fn list_library_folders(
     services: State<'_, Arc<AppServices>>,
 ) -> AppResult<Vec<LibraryFolder>>;
 ```
+
+Refreshes each folder's `isAvailable` flag by checking whether the
+root can be stat-ed, then returns the list. Availability is now
+purely about the filesystem; the DB itself is always present.
 
 ### `rescan_folder`
 
@@ -49,8 +59,8 @@ async fn rescan_folder(
 ) -> AppResult<ScanResult>;
 ```
 
-Re-walks the specified folder. Incremental: only files with a
-newer `mtime` than what's in the DB get re-processed.
+Re-walks the specified folder. Incremental: only files with a newer
+`mtime` than what's in the DB get re-processed.
 
 ### `rescan_all`
 
@@ -60,6 +70,8 @@ async fn rescan_all(
     app_handle: AppHandle,
 ) -> AppResult<Vec<ScanResult>>;
 ```
+
+Rescan every *available* folder sequentially.
 
 ## Images
 
@@ -74,13 +86,10 @@ async fn query_images(
 ) -> AppResult<Page<ImageSummary>>;
 ```
 
-Paginated grid query. `filter` composes:
-
-- `folder_id: Option<i64>`
-- `tag: Option<String>`
-- `search: Option<String>` — passed through FTS5.
-
-Returns `Page { items, total, page, page_size }`.
+Plain `SELECT ... FROM images WHERE ... ORDER BY ... LIMIT ...` —
+one query against the single central DB. The result rows carry
+absolute paths, built by joining `images.rel_path` onto the folder
+root in Rust.
 
 ### `get_image`
 
@@ -91,10 +100,12 @@ async fn get_image(
 ) -> AppResult<ImageDetails>;
 ```
 
-Returns full details for one image. **Side effect:** if the source
-file's mtime (or any legacy `.xmp` sidecar's mtime) is newer than
-`meta_read_at`, re-reads metadata from disk and updates the DB
-*before* returning.
+Return full details for one image. **Side effect:** if the source
+file's `mtime` is newer than what's stored in the row, the format
+handler is asked to re-read user metadata (title + tags from
+XMP/`System.Keywords`) so that a Lightroom / Explorer edit made
+after import is picked up on next load. Fresh reads only update the
+row if the mtime moved forward; there is no periodic polling.
 
 ### `update_image_metadata`
 
@@ -107,10 +118,10 @@ async fn update_image_metadata(
 ) -> AppResult<ImageDetails>;
 ```
 
-Apply a metadata patch, embed the merged XMP into the source file,
-delete any legacy `.xmp` sidecar, and return the new state. Emits
-`app://image-updated`. Returns `Err` on unsupported formats
-(anything other than JPEG or PNG) or file-write failures.
+Apply a metadata patch (title, tags, `tags_add`, `tags_remove`) to
+`magpie.db`. **The source file is never touched.** Rebuilds the
+row's FTS entry so subsequent search reflects the change. Emits
+`app://image-updated`.
 
 ### `batch_update_metadata`
 
@@ -123,8 +134,9 @@ async fn batch_update_metadata(
 ) -> AppResult<Vec<i64>>;
 ```
 
-Same as `update_image_metadata` but for many photos. Returns the
-list of IDs that succeeded; failures are logged and skipped.
+Same as `update_image_metadata` but for many photos. Each `id` is
+patched inside its own transaction; the command returns the list of
+`ids` that succeeded (failures are logged and skipped).
 
 ### `delete_images`
 
@@ -138,8 +150,8 @@ async fn delete_images(
 ```
 
 Move to Recycle Bin (default) or permanently delete. Also removes
-any legacy `.xmp` sidecar + thumbnails + DB row. Returns per-file
-success/failure.
+the DB rows (via ON DELETE CASCADE) and cached thumbnails. Returns
+per-file success/failure.
 
 ## Tags
 
@@ -152,37 +164,36 @@ async fn list_tags(
 ) -> AppResult<Vec<TagStats>>;
 ```
 
-Every tag with a photo count. Optional prefix filter for
-autocompletion.
+Straight `SELECT` from the central `tags` table joined against
+`image_tags`. Optional `prefix` narrows by `LIKE ? COLLATE NOCASE`.
 
 ### `rename_tag`
 
 ```rust
 async fn rename_tag(
     services: State<'_, Arc<AppServices>>,
-    app_handle: AppHandle,
     old_name: String,
     new_name: String,
 ) -> AppResult<()>;
 ```
 
-Global rename across every photo. Rewrites every affected embedded
-XMP packet in the source files.
+Rename or merge. If `new_name` already exists, every image that had
+`old_name` gets `new_name` added and the old row is dropped. FTS
+rows for every affected image are rebuilt in the same transaction.
+**Source files are not touched.**
 
 ### `delete_tag`
 
 ```rust
 async fn delete_tag(
     services: State<'_, Arc<AppServices>>,
-    app_handle: AppHandle,
     name: String,
 ) -> AppResult<()>;
 ```
 
-Remove a tag from every photo. Files are updated the same way as
-rename.
+Remove a tag globally. **Source files are not touched.**
 
-## Smart collections (skeleton)
+## Smart collections
 
 ### `list_smart_collections`
 
@@ -211,6 +222,9 @@ async fn delete_smart_collection(
 ) -> AppResult<()>;
 ```
 
+Smart collections live in the central `smart_collections` table
+next to everything else.
+
 ## Thumbnails and image paths
 
 ### `get_thumb_path`
@@ -223,8 +237,9 @@ async fn get_thumb_path(
 ) -> AppResult<String>;
 ```
 
-Returns the absolute path of a cached thumbnail; generates it on
-demand if missing.
+Return the absolute path of a cached thumbnail; generate on demand
+if missing. Thumbnails are indexed by `images.id` and live under
+`%APPDATA%\com.magpie.app\thumbs\`.
 
 ### `get_image_path`
 
@@ -235,8 +250,8 @@ async fn get_image_path(
 ) -> AppResult<String>;
 ```
 
-Returns the absolute path of the source image (used by the details
-panel to render a large preview via `convertFileSrc`).
+Absolute path of the source image (folder root + `rel_path`), for
+the DetailsPanel inline preview via `convertFileSrc`.
 
 ## Diagnostics
 

@@ -58,10 +58,9 @@ Details:
 ## Freshness
 
 A thumbnail is considered fresh iff its file mtime is ≥ the source
-file's mtime. Editing metadata does not change the source mtime
-enough to invalidate a thumbnail (unless Magpie's embed-XMP write
-touched the JPEG — in which case the thumbnail regenerates on next
-scan, which is correct because the JPEG has actually changed).
+file's mtime. Magpie never modifies the source, so editing tags or
+titles doesn't invalidate a thumbnail. If a user replaces the file
+externally (bumping its mtime), the next scan regenerates.
 
 ## Deletion
 

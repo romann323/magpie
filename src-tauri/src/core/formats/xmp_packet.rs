@@ -1,21 +1,22 @@
-//! XMP packet construction and parsing.
+//! XMP packet parsing (read-only after the DB redesign).
 //!
-//! This module is intentionally format-agnostic: it produces / consumes an
-//! `<x:xmpmeta>...</x:xmpmeta>` byte block and knows nothing about how that
-//! block gets embedded (JPEG APP1, PNG iTXt, WebP RIFF chunk, GIF89a
-//! Application Extension, TIFF tag 700, ...). Each format handler is
-//! responsible for extracting the packet from a file, calling
-//! [`parse_xmp`], mutating the returned struct, then handing the output of
-//! [`build_xmp_packet`] back to the format-specific embedder.
+//! This module is intentionally format-agnostic: it consumes an
+//! `<x:xmpmeta>...</x:xmpmeta>` byte block extracted by a format
+//! handler (JPEG APP1, PNG iTXt, WebP RIFF chunk, GIF89a Application
+//! Extension, TIFF tag 700, sidecar `.xmp`) and returns whichever
+//! title + tags it can find.
 //!
-//! Field mapping (industry standard, understood by Adobe Bridge / Lightroom,
-//! digiKam, and Windows File Explorer's "Tags"):
+//! Field mapping (industry standard, understood by Adobe Bridge /
+//! Lightroom, digiKam, and Windows File Explorer's "Tags"):
 //! - `dc:title`       ↔ Title
 //! - `dc:subject`     ↔ Tags
-//! - `dc:description` ↔ preserved from disk, no Magpie UI
-//! - `xmp:Rating`     ↔ preserved from disk, no Magpie UI
+//! - `MicrosoftPhoto:LastKeywordXMP` ↔ fallback Tags source used by
+//!   older versions of Windows Explorer.
+//!
+//! The old writer (`build_xmp_packet` + `merge_user_edits`) was
+//! deleted with the DB redesign — Magpie never round-trips changes
+//! back into the source file anymore.
 
-use crate::brand;
 use crate::error::{AppError, AppResult};
 use quick_xml::events::Event;
 use quick_xml::reader::Reader;
@@ -199,113 +200,8 @@ fn in_list_item(stack: &[Vec<u8>]) -> bool {
     stack.iter().any(|n| n.ends_with(b":li") || n == b"li")
 }
 
-/// Build an XMP packet from user metadata. Values that are `None`/empty are
-/// omitted (rather than emitted as empty elements) so downstream readers
-/// don't see junk fields.
-///
-/// `xmp:MetadataDate` is stamped with the current UTC time so tools that
-/// track edit history know a new edit landed.
-pub fn build_xmp_packet(m: &XmpUserMeta) -> String {
-    let title = m.title.as_deref().unwrap_or("");
-    let description = m.description.as_deref().unwrap_or("");
-    let has_title = !title.is_empty();
-    let has_desc = !description.is_empty();
-    let has_rating = m.rating.is_some();
-    let empty: Vec<String> = Vec::new();
-    let subjects = m.subjects.as_ref().unwrap_or(&empty);
-
-    let now = chrono::Utc::now().to_rfc3339();
-
-    let mut xml = String::new();
-    xml.push_str("<?xpacket begin=\"\u{FEFF}\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?>\n");
-    xml.push_str(&format!(
-        "<x:xmpmeta xmlns:x=\"adobe:ns:meta/\" x:xmptk=\"{}\">\n",
-        brand::PRODUCT_NAME
-    ));
-    xml.push_str("  <rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\">\n");
-    xml.push_str("    <rdf:Description rdf:about=\"\"\n");
-    xml.push_str("        xmlns:xmp=\"http://ns.adobe.com/xap/1.0/\"\n");
-    xml.push_str("        xmlns:dc=\"http://purl.org/dc/elements/1.1/\"");
-    if has_rating {
-        xml.push_str(&format!("\n        xmp:Rating=\"{}\"", m.rating.unwrap_or(0)));
-    }
-    xml.push_str(&format!("\n        xmp:MetadataDate=\"{}\">\n", now));
-
-    if has_title {
-        xml.push_str("      <dc:title>\n");
-        xml.push_str("        <rdf:Alt>\n");
-        xml.push_str(&format!(
-            "          <rdf:li xml:lang=\"x-default\">{}</rdf:li>\n",
-            xml_escape(title)
-        ));
-        xml.push_str("        </rdf:Alt>\n");
-        xml.push_str("      </dc:title>\n");
-    }
-
-    if has_desc {
-        xml.push_str("      <dc:description>\n");
-        xml.push_str("        <rdf:Alt>\n");
-        xml.push_str(&format!(
-            "          <rdf:li xml:lang=\"x-default\">{}</rdf:li>\n",
-            xml_escape(description)
-        ));
-        xml.push_str("        </rdf:Alt>\n");
-        xml.push_str("      </dc:description>\n");
-    }
-
-    if !subjects.is_empty() {
-        xml.push_str("      <dc:subject>\n");
-        xml.push_str("        <rdf:Bag>\n");
-        for s in subjects {
-            xml.push_str(&format!(
-                "          <rdf:li>{}</rdf:li>\n",
-                xml_escape(s)
-            ));
-        }
-        xml.push_str("        </rdf:Bag>\n");
-        xml.push_str("      </dc:subject>\n");
-    }
-
-    xml.push_str("    </rdf:Description>\n");
-    xml.push_str("  </rdf:RDF>\n");
-    xml.push_str("</x:xmpmeta>\n");
-    xml.push_str("<?xpacket end=\"w\"?>\n");
-    xml
-}
-
-fn xml_escape(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    for c in s.chars() {
-        match c {
-            '&' => out.push_str("&amp;"),
-            '<' => out.push_str("&lt;"),
-            '>' => out.push_str("&gt;"),
-            '"' => out.push_str("&quot;"),
-            '\'' => out.push_str("&apos;"),
-            _ => out.push(c),
-        }
-    }
-    out
-}
-
-/// Merge the caller-supplied edits into an existing XMP packet. Missing
-/// UserMeta fields leave the existing packet field untouched — this is how
-/// Magpie avoids clobbering rating/description written by other tools.
-pub fn merge_user_edits(existing: XmpUserMeta, edits: &super::UserMeta) -> XmpUserMeta {
-    XmpUserMeta {
-        title: edits.title.clone().or(existing.title),
-        description: existing.description,
-        rating: existing.rating,
-        subjects: if edits.tags.is_empty() {
-            existing.subjects
-        } else {
-            Some(edits.tags.clone())
-        },
-    }
-}
-
-/// Turn XmpUserMeta into the trait-level UserMeta the UI sees. Rating and
-/// description are silently dropped.
+/// Turn XmpUserMeta into the trait-level UserMeta the UI sees. Rating
+/// and description are silently dropped.
 pub fn to_user_meta(x: &XmpUserMeta) -> super::UserMeta {
     super::UserMeta {
         title: x.title.clone(),
@@ -316,50 +212,6 @@ pub fn to_user_meta(x: &XmpUserMeta) -> super::UserMeta {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn roundtrip_preserves_all_fields() {
-        let m = XmpUserMeta {
-            title: Some("Sunset".into()),
-            description: Some("From the balcony".into()),
-            rating: Some(4),
-            subjects: Some(vec!["outdoor".into(), "sunset".into()]),
-        };
-        let xml = build_xmp_packet(&m);
-        let parsed = parse_xmp(xml.as_bytes()).unwrap();
-        assert_eq!(parsed.title.as_deref(), Some("Sunset"));
-        assert_eq!(parsed.description.as_deref(), Some("From the balcony"));
-        assert_eq!(parsed.rating, Some(4));
-        assert_eq!(
-            parsed.subjects.as_deref(),
-            Some(&["outdoor".to_string(), "sunset".to_string()][..])
-        );
-    }
-
-    /// Magpie no longer surfaces rating/description, but files written by
-    /// Lightroom or digiKam still contain them. The read-modify-write cycle
-    /// must preserve those values byte-identical.
-    #[test]
-    fn merge_preserves_foreign_rating_and_description() {
-        let existing = XmpUserMeta {
-            title: Some("Old title".into()),
-            description: Some("Lightroom caption".into()),
-            rating: Some(5),
-            subjects: Some(vec!["old".into()]),
-        };
-        let edits = super::super::UserMeta {
-            title: Some("New title".into()),
-            tags: vec!["new".into()],
-        };
-        let merged = merge_user_edits(existing, &edits);
-        assert_eq!(merged.title.as_deref(), Some("New title"));
-        assert_eq!(merged.description.as_deref(), Some("Lightroom caption"));
-        assert_eq!(merged.rating, Some(5));
-        assert_eq!(
-            merged.subjects.as_deref(),
-            Some(&["new".to_string()][..])
-        );
-    }
 
     #[test]
     fn windows_explorer_tags_read() {

@@ -51,10 +51,12 @@ quick-xml = { version = "0.36", features = [] }
 
 trash = "5"
 
-# --- Windows-only: Shell IPropertyStore fallback for formats where our
-# native handler cannot embed tags (RAW, video, MP4/MOV, PDF, HEIC, ...).
-# Uses the same property system as Explorer's Properties → Details tab,
-# so tags/title written by either land in the same place.
+# --- Windows-only: Shell IPropertyStore *read* fallback used by the
+# scanner to import tags/titles that Windows Explorer's Properties →
+# Details tab wrote to formats we can't natively parse (RAW families,
+# MP4/MOV, HEIC, PDF, ...). After the DB redesign Magpie never writes
+# back into the property store — everything persists in the per-folder
+# library DB instead.
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.61", features = [
     "Win32_Foundation",

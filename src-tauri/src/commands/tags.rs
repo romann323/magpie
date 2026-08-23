@@ -10,22 +10,31 @@ pub async fn list_tags(
     services: State<'_, Arc<AppServices>>,
     prefix: Option<String>,
 ) -> AppResult<Vec<TagStats>> {
-    queries::list_tags(&services.db, prefix.as_deref())
+    services
+        .db
+        .with_conn(|conn| queries::list_all_tags(conn, prefix.as_deref()))
 }
 
+/// Rename `old_name` → `new_name`. Merges (drops old row, moves
+/// references) when `new_name` already exists.
 #[tauri::command]
 pub async fn rename_tag(
     services: State<'_, Arc<AppServices>>,
     old_name: String,
     new_name: String,
 ) -> AppResult<()> {
-    queries::rename_tag(&services.db, &old_name, &new_name)
+    services
+        .db
+        .with_conn_mut(|conn| queries::rename_tag(conn, &old_name, &new_name))
 }
 
+/// Delete a tag globally.
 #[tauri::command]
 pub async fn delete_tag(
     services: State<'_, Arc<AppServices>>,
     name: String,
 ) -> AppResult<()> {
-    queries::delete_tag(&services.db, &name)
+    services
+        .db
+        .with_conn_mut(|conn| queries::delete_tag(conn, &name))
 }

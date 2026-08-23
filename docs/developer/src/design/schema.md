@@ -1,83 +1,81 @@
 # Database schema
 
-The database is a single SQLite file at
-`%APPDATA%\com.magpie.app\library.db`. Schema definition lives in
-`src-tauri/src/db/migrations.rs`.
+Everything Magpie persists lives in one SQLite file: `magpie.db` in
+the app-data directory. See [Database design](./db-redesign.md) for
+the motivation and the two earlier layouts we've migrated away from.
+
+**Location:** `%APPDATA%\com.magpie.app\magpie.db` (Windows).
+**Owner:** `src-tauri/src/db/schema.rs` reads the DDL from
+`schema.sql` and applies it verbatim on a fresh file.
+**Pragmas:** WAL journal, `synchronous=NORMAL`, foreign keys on,
+`busy_timeout=5000`.
 
 ## Tables
 
 ### `library_folders`
 
-Every folder the user has added to the library.
+Registered root folders. Grows with the number of folders the user
+adds, not with the number of files.
 
-| Column        | Type    | Notes                                       |
-| ------------- | ------- | ------------------------------------------- |
-| **id**        | INTEGER | PK, autoincrement.                          |
-| path          | TEXT    | Absolute, canonical, UNIQUE.                |
-| added_at      | INTEGER | Unix ms.                                    |
-| last_scan_at  | INTEGER | Unix ms; NULL before first scan finishes.   |
+| Column        | Type    | Notes                                              |
+| ------------- | ------- | -------------------------------------------------- |
+| **id**        | INTEGER | PK, autoincrement.                                 |
+| path          | TEXT    | Absolute canonical path, UNIQUE COLLATE NOCASE.    |
+| added_at      | INTEGER | Unix ms.                                           |
+| last_scan_at  | INTEGER | Unix ms; NULL before first scan finishes.          |
+| is_available  | INTEGER | 0/1; 0 when the folder root can't be reached.      |
 
 ### `images`
 
-One row per file (of any format the registry recognises) found by
-the scanner. The table is still called `images` for historical
-reasons; a future migration may rename it to `files`.
+One row per file (of any format the registry recognises) scanned into
+any library folder. Table name is historical; it now holds videos,
+PDFs, and documents too.
 
 | Column          | Type    | Notes                                                    |
 | --------------- | ------- | -------------------------------------------------------- |
-| **id**          | INTEGER | PK, autoincrement.                                       |
+| **id**          | INTEGER | PK, autoincrement. Globally unique.                      |
 | folder_id       | INTEGER | FK → `library_folders(id)` ON DELETE CASCADE.            |
-| path            | TEXT    | Absolute path, UNIQUE.                                   |
+| rel_path        | TEXT    | Folder-relative, forward slashes.                        |
 | filename        | TEXT    | Basename (`IMG_1234.jpg`).                               |
-| ext             | TEXT    | Lowercase extension, no dot (`jpg`, `heic`, …).          |
+| ext             | TEXT    | Lowercase, no leading dot.                               |
 | size_bytes      | INTEGER | From `fs::Metadata::len()`.                              |
-| mtime_ms        | INTEGER | Modification time in Unix ms.                            |
+| mtime_ms        | INTEGER | Modification time (Unix ms).                             |
 | width           | INTEGER | Nullable; from handler's technical read.                 |
 | height          | INTEGER | Nullable.                                                |
 | content_hash    | TEXT    | Nullable; XXH3 128-bit hex digest.                       |
 | taken_at        | INTEGER | Nullable; Unix ms from EXIF `DateTimeOriginal`.          |
 | camera_make     | TEXT    | Nullable.                                                |
 | camera_model    | TEXT    | Nullable.                                                |
-| title           | TEXT    | Nullable; user-editable via UI.                          |
-| meta_written_at | INTEGER | Nullable; last time Magpie wrote XMP for this file.      |
-| meta_read_at    | INTEGER | Nullable; last time Magpie read XMP from disk into DB.   |
-| missing         | INTEGER | 0/1 flag for "file expected but not found" (unused v1).  |
+| title           | TEXT    | Nullable; user-editable.                                 |
+| imported_at     | INTEGER | Unix ms when the row was first inserted.                 |
+| missing         | INTEGER | 0/1; 1 after a scan that failed to see the file.         |
 
-Migration `0003_drop_rating_comment` removed the `rating` and
-`comment` columns (v1 shipped without them in the UI).
-
-**Indexes:**
-
-- `idx_images_folder` (folder_id)
-- `idx_images_taken_at` (taken_at)
-- `idx_images_filename` (filename)
+**UNIQUE:** `(folder_id, rel_path)` — the scanner upserts on this key.
+**Indexes:** `idx_images_folder`, `idx_images_taken_at`,
+`idx_images_filename`, `idx_images_ext`, `idx_images_hash`.
 
 ### `tags`
 
-The tag vocabulary.
+| Column | Type    | Notes                              |
+| ------ | ------- | ---------------------------------- |
+| **id** | INTEGER | PK, autoincrement.                 |
+| name   | TEXT    | UNIQUE COLLATE NOCASE.             |
 
-| Column    | Type    | Notes                                     |
-| --------- | ------- | ----------------------------------------- |
-| **id**    | INTEGER | PK, autoincrement.                        |
-| name      | TEXT    | UNIQUE COLLATE NOCASE.                    |
+Global vocabulary. `"Beach"` and `"beach"` end up in the same row.
 
 ### `image_tags`
 
-Many-to-many join between `images` and `tags`.
+Many-to-many join.
 
-| Column     | Type    | Notes                                          |
-| ---------- | ------- | ---------------------------------------------- |
-| image_id   | INTEGER | FK → `images(id)` ON DELETE CASCADE.           |
-| tag_id     | INTEGER | FK → `tags(id)` ON DELETE CASCADE.             |
-| **PK**     |         | (image_id, tag_id).                            |
+| Column     | Type    | Notes                                     |
+| ---------- | ------- | ----------------------------------------- |
+| image_id   | INTEGER | FK → `images(id)` ON DELETE CASCADE.      |
+| tag_id     | INTEGER | FK → `tags(id)` ON DELETE CASCADE.        |
+| **PK**     |         | `(image_id, tag_id)`.                     |
 
-**Indexes:**
-
-- `idx_image_tags_tag` (tag_id) — accelerates "photos with tag X".
+Index: `idx_image_tags_tag(tag_id)`.
 
 ### `images_fts` (virtual, FTS5)
-
-Full-text search index over three columns.
 
 ```sql
 CREATE VIRTUAL TABLE images_fts USING fts5(
@@ -88,20 +86,13 @@ CREATE VIRTUAL TABLE images_fts USING fts5(
 );
 ```
 
-Key attributes:
-
-- **Contentless** (`content=''`): the FTS table doesn't store the
-  original text; queries return `rowid` (= `images.id`) and we join.
-- **`contentless_delete=1`** (SQLite 3.43+): lets us `DELETE FROM
-  images_fts` before re-inserting a row. Without it,
-  `rebuild_fts_row_tx` fails and rolls back every metadata write.
-  See migration `0002_fts_contentless_delete`.
-- **Diacritics removed at level 2**: `naive` and `naïve` are the same
-  token.
+- Contentless (`content=''`) — `rowid` mirrors `images.id`; we join
+  from FTS matches back to the base table.
+- `contentless_delete=1` — required for our rebuild-per-row strategy
+  (`DELETE + INSERT` inside every metadata patch).
+- Diacritics folded (`naive` = `naïve`).
 
 ### `smart_collections`
-
-Skeleton in v1 — data model exists, UI to come.
 
 | Column     | Type    | Notes                                     |
 | ---------- | ------- | ----------------------------------------- |
@@ -110,45 +101,67 @@ Skeleton in v1 — data model exists, UI to come.
 | filter     | TEXT    | JSON-serialised `ImageFilter`.            |
 | sort_order | INTEGER |                                           |
 
-### `_migrations`
+### `app_settings`
 
-Housekeeping.
+Key-value store for app-wide preferences the UI persists across
+launches.
 
-| Column     | Type    | Notes                                    |
-| ---------- | ------- | ---------------------------------------- |
-| **name**   | TEXT    | PK; migration name (e.g. `0001_init`).   |
-| applied_at | INTEGER | Unix ms when the migration ran.          |
+| Column  | Type | Notes                                     |
+| ------- | ---- | ----------------------------------------- |
+| **key** | TEXT | PK.                                       |
+| value   | TEXT | Free-form (JSON, plain string, …).        |
+
+### `schema_meta` (singleton, row `id = 1`)
+
+| Column          | Type    | Notes                                              |
+| --------------- | ------- | -------------------------------------------------- |
+| **id**          | INTEGER | Constant `1`.                                      |
+| magpie_version  | TEXT    | `CARGO_PKG_VERSION` when the DB was created.       |
+| schema_version  | INTEGER | Bump on breaking schema changes.                   |
+| created_at      | INTEGER | Unix ms.                                           |
+
+Used by `db::schema::apply` to decide whether the DB is fresh (no
+`schema_meta` table → run DDL) or upgradable (row present → check
+version).
 
 ## Relationships
 
 ```
-library_folders ─┐
-                 │ (1..N)
-                 ▼
-              images ────────┐
-                 ▲           │ (1..N)
-                 │ (rowid=id)│
-                 │           ▼
-              images_fts   image_tags
-                             ▲
-                             │ (N..1)
-                             │
-                            tags
+library_folders (1) ─────┐
+                         │ folder_id
+                         ▼
+                       images ────── (rowid = id) ──── images_fts
+                         ▲
+                         │ image_id
+                         ▼
+                     image_tags
+                         ▲
+                         │ tag_id
+                         ▼
+                        tags
 ```
+
+## Global IDs
+
+There is no packing scheme. `images.id` is a plain SQLite
+autoincrement primary key and is unique across the whole app. The IPC
+layer forwards it verbatim; the frontend treats it as opaque.
 
 ## Migrations
 
-| Name                          | Effect                                                       |
-| ----------------------------- | ------------------------------------------------------------ |
-| `0001_init`                   | Full schema above (with `rating`/`comment`, without          |
-|                               | `contentless_delete`).                                       |
-| `0002_fts_contentless_delete` | Drop + recreate `images_fts` with `contentless_delete=1`;    |
-|                               | repopulate from live data; blank `meta_read_at` to force     |
-|                               | FS re-read.                                                  |
-| `0003_drop_rating_comment`    | Drop `rating` and `comment` columns from `images`; drop      |
-|                               | `comment` column from `images_fts`; strip rating/comment     |
-|                               | filters from any stored smart collections; blank             |
-|                               | `meta_read_at` to force FS re-read on next open.             |
+`schema_meta.schema_version` is bumped when the schema changes. Only
+version 1 exists today. Future migrations plug into
+`db::schema::apply` between the "existing DB" branch and the "version
+matches" check.
 
-Each migration is applied atomically inside a transaction and
-recorded in `_migrations` on success.
+Two legacy on-disk layouts are recognised at startup and imported
+one-shot into `magpie.db`:
+
+1. **Pre-redesign** — `library.db` in the app-data dir.
+2. **Per-folder redesign** — `registry.db` in the app-data dir plus
+   `<folder>\.magpie\library.db` per registered folder.
+
+See [Database design](./db-redesign.md) for the migration algorithm.
+Legacy files are never deleted in place — they get a
+`.migrated-<yyyymmddThhmmss>` suffix so the user can inspect or
+restore them.

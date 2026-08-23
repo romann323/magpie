@@ -35,28 +35,30 @@ Magpie/
 │     ├─ error.rs                      # AppError, AppResult
 │     ├─ types.rs                      # Rust-side IPC types (mirror src/types.ts)
 │     ├─ db/
-│     │  ├─ mod.rs                     # Db (Mutex<Connection>) + with_conn helper
-│     │  ├─ migrations.rs              # SQL migrations (schema + FTS fix)
-│     │  └─ queries.rs                 # apply_metadata_patch, get_image, etc.
+│     │  ├─ mod.rs                     # Db handle (Arc<Mutex<Connection>>)
+│     │  ├─ schema.rs                  # Apply schema.sql on fresh DBs
+│     │  ├─ schema.sql                 # DDL for magpie.db
+│     │  ├─ queries.rs                 # All SQL against magpie.db
+│     │  └─ migrate.rs                 # One-shot import from legacy DB layouts
 │     ├─ core/
 │     │  ├─ mod.rs                     # AppServices, FormatRegistry, dirs
-│     │  ├─ scanner.rs                 # Parallel folder scan
-│     │  ├─ thumbnail.rs               # Thumb generation + caching
-│     │  ├─ formats/                   # Per-format handlers (registry-based)
+│     │  ├─ scanner.rs                 # Parallel folder scan (writes rel_paths)
+│     │  ├─ thumbnail.rs               # Thumb generation + caching (keyed by image_id)
+│     │  ├─ formats/                   # Per-format handlers, all read-only
 │     │  │  ├─ mod.rs                  # FormatHandler trait + FormatRegistry
-│     │  │  ├─ common.rs               # Atomic write, EXIF/dims utilities
-│     │  │  ├─ xmp_packet.rs           # XMP parse + build (single source of truth)
-│     │  │  ├─ jpeg.rs                 # writable
-│     │  │  ├─ png.rs                  # writable
-│     │  │  ├─ webp.rs                 # writable
-│     │  │  ├─ gif.rs                  # writable (GIF89a only)
-│     │  │  ├─ tiff.rs                 # read-only
-│     │  │  └─ stubs.rs                # HEIC, PDF, video, RAW, … (read-only)
+│     │  │  ├─ common.rs               # EXIF/dims utilities, verbatim-path helpers
+│     │  │  ├─ xmp_packet.rs           # XMP parser (read only)
+│     │  │  ├─ win_shell.rs            # Windows IPropertyStore reader
+│     │  │  ├─ jpeg.rs
+│     │  │  ├─ png.rs
+│     │  │  ├─ webp.rs
+│     │  │  ├─ gif.rs
+│     │  │  ├─ tiff.rs
+│     │  │  └─ stubs.rs                # HEIC, PDF, video, RAW, …
 │     │  └─ metadata/
 │     │     ├─ mod.rs
-│     │     ├─ read.rs                 # Delegates to registry + legacy sidecar
-│     │     ├─ write.rs                # Delegates to registry + sidecar cleanup
-│     │     └─ sidecar.rs              # Legacy `.xmp` path helper (read + cleanup)
+│     │     ├─ read.rs                 # Reads at scan time; populates magpie.db
+│     │     └─ sidecar.rs              # Legacy `.xmp` reader (never writes)
 │     └─ commands/                     # Tauri command handlers
 │        ├─ mod.rs
 │        ├─ library.rs                 # add/remove/list folders, rescan

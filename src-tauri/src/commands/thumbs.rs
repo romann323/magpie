@@ -3,7 +3,6 @@ use crate::core::AppServices;
 use crate::db::queries;
 use crate::error::{AppError, AppResult};
 use crate::types::ThumbSize;
-use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::State;
 
@@ -16,12 +15,14 @@ pub async fn get_thumb_path(
     size: Option<ThumbSize>,
 ) -> AppResult<String> {
     let size = size.unwrap_or(ThumbSize::Small);
-    let details = queries::get_image_row(&services.db, id)?;
-    let source = PathBuf::from(&details.summary.path);
+    let (row, root) = services
+        .db
+        .with_conn(|conn| queries::get_image_with_root(conn, id))?
+        .ok_or(AppError::ImageNotFound(id))?;
+    let source = root.join(&row.rel_path);
 
     let path = thumbnail::thumb_path(&services.thumb_cache_dir, id, size);
     if !path.exists() {
-        // Generate on demand
         if let Err(e) =
             thumbnail::ensure_thumbnails(&services.thumb_cache_dir, &source, id)
         {
@@ -42,6 +43,9 @@ pub async fn get_image_path(
     services: State<'_, Arc<AppServices>>,
     id: i64,
 ) -> AppResult<String> {
-    let details = queries::get_image_row(&services.db, id)?;
-    Ok(details.summary.path)
+    let (row, root) = services
+        .db
+        .with_conn(|conn| queries::get_image_with_root(conn, id))?
+        .ok_or(AppError::ImageNotFound(id))?;
+    Ok(root.join(&row.rel_path).to_string_lossy().to_string())
 }

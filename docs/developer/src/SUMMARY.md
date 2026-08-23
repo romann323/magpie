@@ -30,7 +30,7 @@
 - [Scanner algorithm](./design/scanner.md)
 - [Thumbnail pipeline](./design/thumbnails.md)
 - [Metadata read path](./design/metadata-read.md)
-- [Metadata write path](./design/metadata-write.md)
+- [Database redesign](./design/db-redesign.md)
 - [File formats](./design/file-formats.md)
 - [Adding a format handler](./design/adding-a-format-handler.md)
 - [Testing strategy](./design/testing.md)
