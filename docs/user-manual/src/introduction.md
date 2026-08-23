@@ -25,10 +25,10 @@ way to sort through them:
 
 - **Find things fast.** Type `beach` in the search box and every file
   you tagged with `beach` shows up, no matter which folder it's in.
-- **Nothing gets moved.** Your files stay exactly where they are on
-  disk. Tags are saved *inside* the file itself — in the same standard
-  place Windows Explorer uses — so no extra sidecar files clutter your
-  folders (for the formats that support it).
+- **Nothing gets moved or modified.** Your files stay exactly where
+  they are on disk, byte-for-byte unchanged. Tags are saved in a
+  small database file (`.magpie\library.db`) *inside the folder*, so
+  when you copy the folder somewhere else your tags come with it.
 - **One tool for all your files.** Photos, videos, and documents all
   live in the same library, side by side, with the same tag search.
 

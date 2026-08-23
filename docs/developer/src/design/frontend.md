@@ -126,11 +126,11 @@ rationale (no derived types).
 
 1. **Title** — editable input, auto-saves via `updateImageMetadata`.
 2. **Tags** — `TagInput`, auto-saves via `updateImageMetadata`.
-3. **Format metadata** — read-only: handler name +
-   `canWriteTags` note. Room to grow into per-format editable
-   fields (GPS, description, …) as those handlers add them.
+3. **Format metadata** — read-only: handler name. Room to grow
+   into per-format editable fields (GPS, description, …) as those
+   handlers grow their surface area.
 4. **File info** — `<dl>` of the `technical` list returned by the
-   backend.
+   backend plus filename, size, format, mtime, and import time.
 
 Local edit state is seeded from the query result only when the
 `id` changes (guarded by `lastLoadedId.current`), avoiding the

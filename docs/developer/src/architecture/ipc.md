@@ -55,18 +55,16 @@ The frontend types file is a plain declaration file:
 
 ```ts
 export interface ImageDetails {
-  id: number
-  path: string
+  id: number            // packed global ID
+  folderId: number
+  path: string          // absolute (folder root + rel_path)
   filename: string
   // ...
   tags: string[]
   title: string | null
-  metaWrittenAt: number | null
-  metaReadAt: number | null
-  // Populated per-request by the active format handler:
+  importedAt: number    // when the row was first inserted
   technical: Array<[string, string]>
   formatHandler: string
-  canWriteTags: boolean
 }
 ```
 
@@ -91,7 +89,7 @@ frontend catches up.
 | Event                       | Payload                            | Fired when                                     |
 | --------------------------- | ---------------------------------- | ---------------------------------------------- |
 | `app://scan`             | `ScanProgress { folder_id, done, total, current }` | During a folder scan.  |
-| `app://image-updated`    | `i64` (image id)                   | After successful metadata write.               |
+| `app://image-updated`    | `i64` (packed global ID)           | After successful metadata patch.               |
 | `app://images-deleted`   | `Vec<i64>` (deleted ids)           | After successful delete.                       |
 
 Listeners are attached in `App.tsx` via `useEffect` + `onScanProgress`

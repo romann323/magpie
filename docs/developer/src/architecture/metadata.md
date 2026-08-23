@@ -1,16 +1,16 @@
 # Metadata pipeline
 
 The metadata pipeline is where Magpie most differs from a plain
-file browser. It has three sub-pipelines (read, patch, write) and a
-single invariant that ties them together:
+file browser. It has two sub-pipelines (read + patch) and one hard
+invariant that ties them together:
 
-> **Invariant.** After a successful save via a writable
-> [format handler](../design/file-formats.md), the database and the
-> embedded metadata inside the source file reflect the same title
-> and tags. Magpie does not produce sidecar files; any pre-existing
-> legacy sidecar is removed by the write path after the embed
-> succeeds. For files whose handler is read-only, the DB row and the
-> library are the sole source of truth for tags.
+> **Invariant.** For every file the scanner has seen, the
+> per-folder `library.db` row is the single source of truth for
+> user metadata (title + tags). Magpie **never writes back into the
+> source file**. On first scan we read existing tags out of XMP
+> and the Windows Shell property store so the user doesn't lose
+> anything they'd already labelled; from that point on the DB is
+> authoritative.
 
 ## The read pipeline
 
@@ -37,27 +37,28 @@ single invariant that ties them together:
        │       ┌────────────────────┘
        │       │
        │       ▼
-       │  legacy sidecar (only if present)
+       │  Windows Shell IPropertyStore (Win-only fallback)
        │       │
        └───────┴──────► Merged ImageMetaFromFile
 ```
 
-Ordering within user meta: the handler's own `read_user` is called
-first; then any **legacy** sidecar (from an older Magpie version or
-from Lightroom) is parsed and its non-empty fields overwrite the
-handler's values. This preserves user data during the one-way
-migration to embed-only. The next successful save embeds the merged
-state and removes the sidecar.
+Format-native `read_user` runs first; then any Windows-specific
+Shell property read runs to catch formats we don't natively parse
+(RAW, HEIC, MP4, PDF, …). Legacy `.xmp` sidecars are also read at
+this stage for backward compatibility with older Magpie versions
+and Lightroom projects.
 
 The XMP parser (`quick_xml` state machine in
-`core/formats/xmp_packet.rs`) handles both the Adobe standard fields
-and Microsoft-Explorer variants:
+`core/formats/xmp_packet.rs`) handles both the Adobe standard
+fields and Microsoft-Explorer variants:
 
-- `dc:title`, `dc:description`, `dc:subject` (Alt/Bag containers)
-- `xmp:Rating` (attribute or element — read for preservation, not
-  surfaced in the UI)
+- `dc:title`, `dc:subject` (Alt / Bag containers)
 - `MicrosoftPhoto:LastKeywordXMP` (Windows Explorer's tag store)
-- Attribute-only forms (some tools flatten Alt into an attribute)
+- Attribute-only forms (some tools flatten `Alt` into an attribute)
+
+`read_all` is called by the scanner on first sight of a file, and
+by `get_image` if the file's `mtime` has moved forward since last
+import.
 
 ## The patch pipeline
 
@@ -74,8 +75,8 @@ pub struct MetadataPatch {
 }
 ```
 
-`apply_metadata_patch` (in `db/queries.rs`) runs the whole patch in
-a single transaction:
+`library::apply_metadata_patch` runs the whole patch in a single
+transaction on the *folder's* library DB:
 
 1. Update the `images` row title.
 2. If `tags` is set: replace the row's tags.
@@ -87,95 +88,50 @@ a single transaction:
 If any step fails, the transaction rolls back. Nothing partially
 lands.
 
-## The write pipeline
+The batch command (`batch_update_metadata`) uses the packed global
+IDs to group edits by folder, then applies the patch inside each
+folder's DB in one transaction each — cross-folder writes never
+share a transaction so a network share falling over doesn't roll
+back edits to a local disk.
 
-After `apply_metadata_patch` returns success, the caller
-(`update_image_metadata` or `batch_update_metadata` via
-`apply_patch_and_persist`) does:
+## No write-back to source files
 
-```
-   ┌────────────────────────────────────────┐
-   │  Fetch the *final* state via get_image │
-   │  (reflects the just-applied patch)     │
-   └───────────────┬────────────────────────┘
-                   ▼
-   ┌────────────────────────────────────────┐
-   │  spawn_blocking →                      │
-   │  write_metadata_to_source              │
-   │  ├─ registry.for_ext(ext) → handler    │
-   │  ├─ handler.write_user(path, meta)     │
-   │  │    JPEG   → APP1 XMP                │
-   │  │    PNG    → iTXt XMP chunk          │
-   │  │    WebP   → RIFF XMP chunk          │
-   │  │    GIF89a → Application Extension   │
-   │  │    else   → Err(unsupported)        │
-   │  └─ delete legacy .xmp if any          │
-   └───────────────┬────────────────────────┘
-                   ▼
-   ┌────────────────────────────────────────┐
-   │  On Ok:                                │
-   │  set_meta_written_at + set_meta_read_at│
-   │  Emit app://image-updated              │
-   │                                        │
-   │  On Err (writable handler failed):     │
-   │  Propagate to caller (UI toast).       │
-   │                                        │
-   │  On Err (handler is read-only):        │
-   │  DB kept, UI shows "library only" note.│
-   └────────────────────────────────────────┘
-```
-
-Three design choices worth calling out:
-
-1. **The XMP packet is built from the DB's final state, not from
-   the patch.** This way, "add tag X" in batch mode writes a packet
-   containing every tag currently on the file, not just X.
-2. **`meta_read_at` is bumped on write** so the FS-refresh check in
-   `get_image` doesn't fire on files Magpie itself just wrote.
-3. **File-write failure surfaces to the UI.** Unlike the old
-   "sidecar is the fallback" design, there's no silent fallback: an
-   unsupported format returns `Err` so the user sees a clear note.
-   Any tag entered by the user is still recorded in the DB either
-   way, so nothing they typed is lost.
+There is deliberately no "write pipeline" any more. `FormatHandler`
+has no `write_user` method; `win_shell::write_user_meta` is gone;
+so is the atomic-write helper and every `build_xmp_packet` call
+site. See [Database redesign § What the file bytes see change](../design/db-redesign.md#what-the-file-bytes-see-change).
 
 ## FS refresh on read
 
 Every `get_image` call does:
 
 ```rust
-if refresh_needed_from_fs(&path, &cached) {
+if fs_meta.mtime > row.mtime_ms {
     let fresh = read_all(&registry, &path);
-    resync_user_meta_from_fs(&db, id, &fresh);
-    set_meta_read_at_now(&db, id);
+    library::set_image_meta(&mut conn, local_id, &fresh);
 }
 ```
 
-`refresh_needed_from_fs` is a simple mtime comparison: if the
-source file (or any legacy `.xmp` alongside it) was modified after
-Magpie's last read, we re-read from disk. This is how a tag added
-in Windows Explorer becomes visible on next click of that file.
-The legacy-sidecar branch remains so that users migrating from
-Lightroom (or an older Magpie) still get their existing edits on
-first scan.
+Simple mtime comparison: if the source file changed after Magpie's
+last import, re-read its metadata into the DB. This is how a tag
+added in Windows Explorer becomes visible on next click of that
+file **only for the first mtime bump after import** — because we
+overwrite the DB row from the file. After the first import, Magpie
+edits stay in the DB even if the file changes on disk (Magpie
+doesn't currently detect a *tag-only* Explorer edit vs. a real
+content edit, so `mtime` bumps do wipe Magpie-side tag edits with
+the file's current tags — an intentional trade-off; the DB is the
+source of truth if you want your edits to stick, external tools
+should not be used to tag afterwards).
 
-## Windows Explorer tag interop specifics
+## Windows Shell property store (import-only)
 
-Explorer writes tags into JPEGs using both `dc:subject` (standard)
-and `MicrosoftPhoto:LastKeywordXMP` (Microsoft-specific). Some
-older workflows only write the latter, so Magpie's reader accepts
-both and unions them, deduping case-insensitively.
+For formats without a native XMP parser (RAW, HEIC, MP4, PDF, …),
+Magpie falls back to Windows' Shell property store to read tags
+and titles on first scan. `System.Title`, `System.Keywords`, and
+similar canonical properties are consulted. This ensures that a
+user who had been tagging RAWs through Explorer's *Properties →
+Details* dialog doesn't lose those tags on migration.
 
-On the write side, Magpie emits `dc:subject` in the XMP packet.
-Windows Explorer resolves its *Tags* column from either
-`dc:subject` or `MicrosoftPhoto:LastKeywordXMP`, so a Magpie-written
-JPEG shows up correctly in Explorer with only the standard Dublin
-Core block.
-
-## Preserving fields Magpie doesn't own
-
-The XMP builder preserves any `dc:description`, `xmp:Rating`, GPS
-coordinates, and other tags a foreign tool wrote — Magpie's UI
-doesn't expose these, but the reader still parses them into
-`XmpUserMeta` so the writer can put them back into the rebuilt
-packet unchanged. See the `write_preserves_foreign_rating_and_description`
-integration test.
+`win_shell` was previously bidirectional; after the redesign it is
+strictly read-only.

@@ -69,14 +69,14 @@ tail of `app.log`.
 | Signal                                         | Level  | Emitted by                                                       |
 | ---------------------------------------------- | ------ | ---------------------------------------------------------------- |
 | App started / logging initialised              | INFO   | `lib.rs::init_logging`, `lib.rs` main run                        |
-| Migration applied                              | INFO   | `db/migrations.rs::run`                                          |
+| Legacy central DB migrated                     | INFO   | `db/legacy_migration.rs::migrate_legacy_central_db`              |
+| Folder registered / attached                   | INFO   | `db/pool.rs`, `commands/library.rs::add_library_folder`          |
+| Folder library unavailable (drive unplugged)   | WARN   | `db/pool.rs::open`                                               |
+| Sync-risk detected (OneDrive/Dropbox/UNC)      | INFO   | `commands/library.rs::check_folder_sync_risk`                    |
 | Command entry (`update_image_metadata`, …)     | INFO   | Each Tauri command that mutates state                            |
 | `get_image` FS-refresh triggered               | INFO   | `commands/images.rs::get_image`                                  |
-| Embedded XMP write failed                      | WARN   | `commands/images.rs::apply_patch_and_persist`                    |
-| Unsupported format for embed                   | WARN   | `core/metadata/write.rs::write_metadata_to_source`               |
-| Legacy sidecar cleanup failed                  | WARN   | `core/metadata/write.rs::write_metadata_to_source`               |
 | Scan errors (unreadable file, permission)      | WARN   | `core/scanner.rs`                                                |
-| DB migration or startup errors                 | ERROR  | `db/mod.rs`, `lib.rs::run`                                       |
+| DB errors (attach failed, mutex poisoned)      | ERROR  | `db/pool.rs`, `db/library.rs`, `lib.rs::run`                     |
 | Frontend applyTags dispatch                    | INFO   | `features/DetailsPanel.tsx::MultiDetails.applyTags`              |
 
 ## Log rotation

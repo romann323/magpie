@@ -19,57 +19,29 @@ and a rough entry point for the future contributor picking it up.
 
 ## Cloud sync
 
-- **No account, no cloud storage integration.** OneDrive and iCloud
-  Photos are third-party sync backends the user configures at the OS
-  level; Magpie reads whatever the OS has materialised.
+- **No account, no cloud storage integration.** OneDrive, Dropbox,
+  Google Drive, and iCloud are third-party sync backends the user
+  configures at the OS level; Magpie reads whatever the OS has
+  materialised, and warns when a picked folder lives on such a
+  disk (see `check_folder_sync_risk`).
 
-## Video
+## Writing tags into source files
 
-- **Videos aren't listed.** The scanner filters to still-image
-  extensions. A future release could add HEVC/MP4 with a separate
-  thumbnail pipeline (currently the WebP encoder can't handle video
-  frames).
-
-## Sidecar XMP files
-
-- **Magpie does not create `.xmp` sidecar files.** All metadata is
-  embedded directly in the source image (JPEG APP1 / PNG iTXt). The
-  reader still parses a legacy sidecar authored by an older Magpie
-  version or by Lightroom on first scan, but the first successful
-  save embeds the merged metadata into the source and deletes the
-  sidecar. There is intentionally no "write to sidecar instead"
-  fallback and no configuration to enable one.
-
-## Metadata write for RAW / HEIC / TIFF / WebP / GIF / BMP
-
-- The write path currently supports **only JPEG and PNG**. Attempts
-  to save metadata on any other format return `AppError::MetadataWrite`
-  and are surfaced to the UI as a "this format can't store Magpie
-  metadata" toast — Magpie refuses to silently drop the edit or
-  fall back to a sidecar.
-- Follow-ups (in likely difficulty order): WebP `XMP ` chunk in
-  the RIFF container, TIFF tag 700 in the primary IFD, HEIF item
-  property, and finally each RAW variant. See
-  [`Metadata write path`](../design/metadata-write.md) for where
-  new formats plug in — every one of them terminates in
-  `atomic_write_bytes` and a `format_supports_embedded_xmp(ext)`
-  gate.
-- Modifying proprietary RAW containers (`.CR2`, `.CR3`, `.NEF`,
-  `.ARW`, `.DNG`, `.RAF`, `.ORF`, `.RW2`, `.SRW`) in place is risky
-  and format-specific; a safe implementation would need per-vendor
-  handling and is a significant multi-release investment.
+- **Magpie deliberately does not write into source files.** After
+  the DB redesign, tags and titles live exclusively in each
+  folder's `.magpie/library.db`. This removes an entire category
+  of bugs (partial writes, format-specific edge cases, cloud sync
+  re-uploading gigabytes for one tag change) at the cost of losing
+  the "tag once, portable everywhere in the XMP ecosystem" story.
+  Users who need file-embedded tags can still author them in
+  Lightroom / Bridge / Explorer; Magpie will pick them up on the
+  first scan of that folder.
 
 ## Ratings, colour labels, pick / reject flags
 
 - No UI for star ratings, `xmp:Label` colour labels, or pick /
-  reject flags. Fields already exist in the XMP namespace and the
-  reader preserves them when foreign tools set them; wiring a UI
-  would be a small extension of the metadata patch struct.
-
-## Multi-user / multi-library switching
-
-- v1 assumes one user, one library, per install. Switching libraries
-  requires resetting the app data directory.
+  reject flags. The DB schema could grow columns for them; the
+  read-only XMP parser already understands `xmp:Rating`.
 
 ## In-app full-screen preview
 
@@ -80,17 +52,26 @@ and a rough entry point for the future contributor picking it up.
 ## Undo / redo
 
 - No global undo stack. The safety net is auto-save + Recycle Bin +
-  standard XMP interop — the user's edits are never lost, but reverting
-  them means editing again.
+  the fact that source files are never modified — the user's raw
+  material is never lost, but reverting a DB edit means editing
+  again.
 
 ## Smart collections editor
 
-- The DB schema and Tauri commands for smart collections exist, but
-  the UI doesn't expose creation/editing yet.
+- The DB schema and Tauri commands for smart collections exist
+  (they live in the central `registry.db`), but the UI doesn't
+  expose creation/editing yet.
 
 ## Duplicate detection
 
 - Content hashes are computed on scan and stored (`content_hash`
-  column), but no duplicate-finder UI ships in v1. A future task
-  could add a "Duplicates" filter that groups rows by identical
-  hashes.
+  column in each library DB), but no duplicate-finder UI ships in
+  v1. A future task could add a "Duplicates" filter that joins
+  across attached DBs on `content_hash`.
+
+## Multi-PC concurrent editing on a synced folder
+
+- Magpie *warns* when a folder lives on OneDrive / Dropbox /
+  Google Drive / iCloud / UNC share, but doesn't currently
+  coordinate edits between two PCs that open the same
+  `library.db` at once. Safe usage is "one PC at a time".

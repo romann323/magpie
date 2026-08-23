@@ -14,6 +14,7 @@ import type {
   ScanProgress,
   ScanResult,
   SmartCollection,
+  SyncRiskWarning,
   TagStats,
   ThumbSize,
 } from './types'
@@ -33,6 +34,14 @@ export const rescanFolder = (id: number) =>
   invoke<ScanResult>('rescan_folder', { id })
 
 export const rescanAll = () => invoke<ScanResult[]>('rescan_all')
+
+/**
+ * Ask the backend whether a folder path lives in a cloud-synced or network
+ * location. Returns `null` for safe paths, or a `SyncRiskWarning` describing
+ * the risk so the UI can show a confirm dialog before adding the folder.
+ */
+export const checkFolderSyncRisk = (path: string) =>
+  invoke<SyncRiskWarning | null>('check_folder_sync_risk', { path })
 
 // ---------- Images ----------
 

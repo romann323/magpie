@@ -2,10 +2,15 @@
 
 ## Objective
 
-Given a library folder path, populate the `images` table with a
-row per supported image file, extract metadata, generate
-thumbnails, and keep the DB in sync with the filesystem on
-subsequent runs — all while staying responsive.
+Given a library folder path, populate the folder's per-folder
+`library.db` (`<folder>/.magpie/library.db`) with a row per
+supported file, extract metadata, generate thumbnails, and keep
+the DB in sync with the filesystem on subsequent runs — all while
+staying responsive.
+
+Every path stored in the DB is **folder-relative** (forward
+slashes). The scanner joins root + relative path when it needs the
+actual filesystem location.
 
 ## Pipeline
 
@@ -43,11 +48,16 @@ denominator but otherwise do no work.
 
 ## Stage 3 — diff
 
-For each kept entry, Magpie looks up the path in `images`:
+For each kept entry, Magpie looks up the *folder-relative* path in
+the folder's `images` table:
 
 ```
-SELECT id, mtime_ms FROM images WHERE path = ?1
+SELECT id, mtime_ms FROM images WHERE rel_path = ?1
 ```
+
+`.magpie/library.db` itself (and its WAL / SHM sidecar files) is
+excluded from the walk so the scanner doesn't try to import its own
+storage.
 
 - **New file** (no row): full extract required.
 - **Existing, mtime unchanged**: skip.
@@ -79,26 +89,25 @@ missing fields are left NULL.
 
 ## Stage 5 — upsert
 
-The DB is the single writer. To amortise transaction overhead,
-extracted rows are pushed to a bounded channel; a single "writer
-task" drains the channel and commits batches of up to 128 rows in
-one transaction:
+The folder's `library.db` is the single writer for this folder;
+different folders write in parallel. Extracted rows are pushed to a
+bounded channel and a writer task commits batches of up to 128 rows
+per transaction:
 
 ```rust
 let tx = conn.transaction()?;
-for row in batch { upsert_image(&tx, &row)?; }
+for row in batch { library::upsert_image(&tx, &row)?; }
 tx.commit()?;
 ```
 
-The `upsert_image` SQL is:
+The upsert SQL uses `rel_path` (folder-relative) as the conflict key:
 
 ```sql
-INSERT INTO images (path, folder_id, filename, ext, size_bytes, mtime_ms,
+INSERT INTO images (rel_path, filename, ext, size_bytes, mtime_ms,
                     width, height, content_hash, taken_at,
-                    camera_make, camera_model, title,
-                    meta_read_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-ON CONFLICT(path) DO UPDATE SET
+                    camera_make, camera_model, title, imported_at, missing)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+ON CONFLICT(rel_path) DO UPDATE SET
     size_bytes    = excluded.size_bytes,
     mtime_ms      = excluded.mtime_ms,
     width         = excluded.width,
@@ -108,7 +117,7 @@ ON CONFLICT(path) DO UPDATE SET
     camera_make   = excluded.camera_make,
     camera_model  = excluded.camera_model,
     title         = excluded.title,
-    meta_read_at  = excluded.meta_read_at;
+    missing       = 0;
 ```
 
 After the row lands, tags are reconciled: everything in `image_tags`
@@ -123,10 +132,11 @@ Once a row is in the DB, the scanner enqueues a thumbnail task for
 that image id. Thumbnails run on the same rayon pool but with lower
 priority so they don't starve extraction.
 
-`ensure_thumbnails(cache_dir, src_path, image_id)`:
+`ensure_thumbnails(cache_dir, src_path, gid)`:
 
 1. For each size (small, medium):
-   - Path = `cache_dir / "<id>-<size>.webp"`.
+   - Path = `cache_dir / "<gid>-<size>.webp"` where `gid` is the
+     *packed global ID* (`pack_global_id(folder_id, local_id)`).
    - Skip if the thumbnail's mtime ≥ the source's mtime.
 2. Decode the source with `image::open`.
 3. Resize with `fast_image_resize::Resizer` (Lanczos3, SIMD).

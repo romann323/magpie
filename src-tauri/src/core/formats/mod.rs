@@ -1,30 +1,25 @@
 //! Pluggable per-format handlers.
 //!
-//! Every file type Magpie touches is represented by a struct implementing
-//! [`FormatHandler`]. The [`FormatRegistry`] maps a file extension to the
-//! handler that should parse (and optionally rewrite) that file. Adding a
-//! new format is a matter of:
+//! After the DB redesign, format handlers are **read-only**. Tags and
+//! titles are stored in the per-folder library DB, not in the file
+//! bytes. Handlers exist to:
 //!
-//! 1. Adding a new file under `src-tauri/src/core/formats/` implementing
+//! 1. Extract *technical* metadata (dimensions, EXIF, duration, page
+//!    count, GPS) for display in the DetailsPanel and for filtering
+//!    (`taken_at`, `camera_*`).
+//! 2. Read whatever tags a file *already* carries on first scan (JPEG
+//!    XMP, PNG iTXt, Lightroom `.xmp` sidecar, Windows Shell property
+//!    store) so pre-existing libraries import cleanly.
+//!
+//! Adding support for a new file type is a matter of:
+//!
+//! 1. Adding a file under `src-tauri/src/core/formats/` implementing
 //!    [`FormatHandler`].
 //! 2. Registering it in [`FormatRegistry::new`].
-//! 3. (Optional) adding a roundtrip test in `src-tauri/tests/`.
 //!
-//! Handlers fall into three tiers:
-//!
-//! - **Full read + write** — Magpie can read technical metadata *and* embed
-//!   tag edits back into the source file. Today: JPEG, PNG, WebP, GIF89a.
-//! - **Read only** — Magpie reads technical metadata (dimensions, EXIF,
-//!   duration, ...) but returns a friendly error on tag writes. Today:
-//!   TIFF/DNG, HEIF/HEIC/AVIF, JPEG XL, JPEG 2000, PSD, PDF, MP4/MOV,
-//!   MKV/WebM, camera RAW families.
-//! - **Discover only** — the extension is recognized so the scanner picks
-//!   the file up, but the handler has no metadata knowledge. Today: BMP,
-//!   ICO, and legacy raster formats.
-//!
-//! The scanner iterates every registered extension (see
-//! [`FormatRegistry::all_extensions`]), so registering a handler makes its
-//! files immediately visible in the library.
+//! The scanner iterates every registered extension via
+//! [`FormatRegistry::all_extensions`], so registering a handler makes
+//! its files immediately visible in the library.
 
 use crate::error::AppResult;
 use std::path::Path;
@@ -96,9 +91,6 @@ pub enum FormatKind {
 ///   [`TechnicalMeta`] instead.
 /// - `read_user` may return `Err` for genuine I/O errors, but "file has no
 ///   metadata slot" is `Ok(UserMeta::default())`.
-/// - `write_user` on a handler without write support must return
-///   `Err(AppError::MetadataWrite(...))` with a message the UI can display
-///   verbatim. It must **not** silently succeed.
 pub trait FormatHandler: Send + Sync {
     /// Short lowercase identifier surfaced to the UI (e.g. `"jpeg"`).
     fn name(&self) -> &'static str;
@@ -108,16 +100,9 @@ pub trait FormatHandler: Send + Sync {
 
     fn kind(&self) -> FormatKind;
 
-    /// True if [`Self::write_user`] can persist tag edits into this file's
-    /// bytes. When false, the DetailsPanel disables the tag editor and
-    /// explains why.
-    fn can_write_tags(&self) -> bool;
-
     fn read_technical(&self, path: &Path) -> TechnicalMeta;
 
     fn read_user(&self, path: &Path) -> AppResult<UserMeta>;
-
-    fn write_user(&self, path: &Path, meta: &UserMeta) -> AppResult<()>;
 }
 
 /// Runtime lookup table from file extension to [`FormatHandler`]. Built once

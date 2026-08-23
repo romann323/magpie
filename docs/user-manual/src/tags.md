@@ -69,11 +69,14 @@ your tag list tidy — no more `beach`, `beaches`, `beach`,
 
 ## Do tags show up in other apps?
 
-For the formats Magpie can write into (JPEG, PNG, WebP, GIF), yes —
-tags are saved in the same standard XMP format that Windows Explorer,
-Adobe Lightroom, and other tools use. See
-[Interoperability with other tools](./interop.md) for the details.
+**No.** Magpie now stores every tag in a small database inside the
+folder (`.magpie\library.db`); it does not write tags into the files
+themselves. Windows Explorer, Adobe Lightroom, etc. won't see tags
+you added in Magpie.
 
-For read-only formats (RAW, HEIC, PDF, video, …) tags live in
-Magpie's library only. See
-[Supported file formats](./file-formats.md) for the current list.
+The upside is that Magpie **doesn't modify your files** and every
+file type is fully taggable. The downside is that if you want tags
+to travel independently of the folder (email a single JPEG to a
+friend and keep its tag visible in their photo viewer), you need to
+tag it in Explorer / Bridge instead. See
+[Interoperability with other tools](./interop.md) for the details.

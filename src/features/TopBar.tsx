@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { open } from '@tauri-apps/plugin-dialog'
+import { open, confirm } from '@tauri-apps/plugin-dialog'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { addLibraryFolder, rescanAll } from '../ipc'
+import { addLibraryFolder, checkFolderSyncRisk, rescanAll } from '../ipc'
 import { useStore } from '../store'
 import { PRODUCT_NAME } from '../brand'
 import { AppIcon } from '../components/AppIcon'
@@ -26,8 +26,22 @@ export function TopBar() {
         title: 'Select a folder to add to your library',
       })
       if (!picked) return null
-      const path = typeof picked === 'string' ? picked : picked
-      return addLibraryFolder(path as string)
+      const path = typeof picked === 'string' ? picked : (picked as string)
+
+      // Cloud-synced or network share? Warn once so the user knows what
+      // "open on two PCs" means for the library.
+      const risk = await checkFolderSyncRisk(path)
+      if (risk) {
+        const ok = await confirm(risk.message, {
+          title: `Folder is on ${risk.provider}`,
+          kind: 'warning',
+          okLabel: 'Add anyway',
+          cancelLabel: 'Cancel',
+        })
+        if (!ok) return null
+      }
+
+      return addLibraryFolder(path)
     },
     onSuccess: (result) => {
       if (result) {

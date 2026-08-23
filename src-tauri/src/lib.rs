@@ -102,6 +102,7 @@ pub fn run() {
             commands::library::list_library_folders,
             commands::library::rescan_folder,
             commands::library::rescan_all,
+            commands::library::check_folder_sync_risk,
             commands::images::query_images,
             commands::images::get_image,
             commands::images::update_image_metadata,

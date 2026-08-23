@@ -7,8 +7,20 @@ export type LibraryFolder = {
   addedAt: number
   lastScanAt: number | null
   imageCount: number
+  /**
+   * `false` when the folder's `.magpie/library.db` couldn't be found
+   * (removable drive unplugged, network share unreachable, ...). The
+   * folder still appears in the sidebar so the user can rescan when the
+   * drive is available again.
+   */
+  isAvailable: boolean
 }
 
+/**
+ * One row in the grid. `id` is a *packed global ID*
+ * (`folderId * 1_000_000_000 + localId`) so it's unique across every
+ * registered folder.
+ */
 export type ImageSummary = {
   id: number
   folderId: number
@@ -26,32 +38,20 @@ export type ImageSummary = {
 
 /**
  * `technical` is an ordered list of `[label, value]` pairs contributed by the
- * format handler for the current file (dimensions, EXIF, camera, duration, …).
+ * format handler for the current file (dimensions, EXIF, camera, duration, ...).
  * The list is display-ready; UI just prints it verbatim.
  *
- * `formatHandler` is the human-readable handler name (e.g. `"JPEG (XMP APP1)"`)
- * and `canWriteTags` reports whether the handler supports embedding user tags
- * into the source file.
+ * `formatHandler` is the human-readable handler name (e.g. `"jpeg"`) and is
+ * shown in the "Format metadata" section of the details panel.
+ *
+ * `importedAt` is the timestamp (ms since epoch) the row was first added to
+ * the per-folder library DB.
  */
-/** How Magpie will persist title / tags for a given file. */
-export type WriteMode =
-  /** Format handler embeds directly (JPEG XMP, PNG iTXt, WebP, GIF89a, ...). */
-  | 'native'
-  /** Windows Shell property system (RAW, MP4/MOV, HEIC, TIFF, ...). */
-  | 'shell'
-  /** No writable path: metadata lives in the Magpie library only. */
-  | 'libraryOnly'
-
 export type ImageDetails = ImageSummary & {
   tags: string[]
-  cameraMake: string | null
-  cameraModel: string | null
-  metaWrittenAt: number | null
-  metaReadAt: number | null
   technical: Array<[string, string]>
   formatHandler: string
-  canWriteTags: boolean
-  writeMode: WriteMode
+  importedAt: number
 }
 
 export type SortBy = 'takenAt' | 'filename' | 'addedAt' | 'size'
@@ -128,6 +128,16 @@ export type DeleteResult = {
 }
 
 export type ThumbSize = 'small' | 'medium' | 'large'
+
+/**
+ * Returned by `check_folder_sync_risk` when the path the user picked lives
+ * in a cloud-synced or network share and could be edited concurrently
+ * from another PC. `null` from the command means the location is safe.
+ */
+export type SyncRiskWarning = {
+  provider: string
+  message: string
+}
 
 export type AppError = {
   code: string

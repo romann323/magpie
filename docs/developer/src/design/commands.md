@@ -1,8 +1,13 @@
 # Tauri command reference
 
 Every command below is registered in `src-tauri/src/lib.rs` inside
-`tauri::generate_handler![…]`. All are `async fn`, return
-`AppResult<T>`, and use camelCase JSON on the wire.
+`tauri::generate_handler![…]`. Signatures use `AppResult<T>` and
+camelCase JSON on the wire.
+
+> **IDs are packed.** Every `id: i64` an image command accepts or
+> returns is the *global* packed ID
+> (`folder_id * 1_000_000_000 + local_id`). The frontend never sees
+> per-folder local IDs directly.
 
 ## Library management
 
@@ -16,8 +21,10 @@ async fn add_library_folder(
 ) -> AppResult<LibraryFolder>;
 ```
 
-Add a folder to the library and start a background scan. Emits
-`app://scan` progress events. Returns the created row.
+Canonicalises the path, inserts a row into `registry.db`, creates
+the folder's `.magpie/library.db`, attaches it on the registry
+connection, and spawns a background scan. Emits `app://scan`
+progress events.
 
 ### `remove_library_folder`
 
@@ -28,8 +35,10 @@ async fn remove_library_folder(
 ) -> AppResult<()>;
 ```
 
-Removes the folder row (CASCADE removes every image and image_tags
-row). Files on disk are untouched.
+Detach the library from the registry connection and delete the
+`library_folders` row. **The `.magpie/library.db` file on disk is
+left in place** — it's the user's data and Magpie doesn't own the
+folder.
 
 ### `list_library_folders`
 
@@ -38,6 +47,9 @@ async fn list_library_folders(
     services: State<'_, Arc<AppServices>>,
 ) -> AppResult<Vec<LibraryFolder>>;
 ```
+
+Includes `isAvailable` — `false` when the folder's library couldn't
+be reached (removable drive unplugged, network share unreachable).
 
 ### `rescan_folder`
 
@@ -50,7 +62,7 @@ async fn rescan_folder(
 ```
 
 Re-walks the specified folder. Incremental: only files with a
-newer `mtime` than what's in the DB get re-processed.
+newer `mtime` than what's in that folder's DB get re-processed.
 
 ### `rescan_all`
 
@@ -60,6 +72,23 @@ async fn rescan_all(
     app_handle: AppHandle,
 ) -> AppResult<Vec<ScanResult>>;
 ```
+
+Rescan every *available* folder sequentially.
+
+### `check_folder_sync_risk`
+
+```rust
+async fn check_folder_sync_risk(
+    path: String,
+) -> AppResult<Option<SyncRiskWarning>>;
+```
+
+Non-null when `path` looks like it lives on a cloud-synced disk
+(OneDrive / Dropbox / Google Drive / iCloud / Box) or a UNC network
+share. The frontend calls this **before** `add_library_folder` and
+shows a `confirm` dialog with the returned message.
+
+`SyncRiskWarning { provider: String, message: String }`.
 
 ## Images
 
@@ -74,13 +103,9 @@ async fn query_images(
 ) -> AppResult<Page<ImageSummary>>;
 ```
 
-Paginated grid query. `filter` composes:
-
-- `folder_id: Option<i64>`
-- `tag: Option<String>`
-- `search: Option<String>` — passed through FTS5.
-
-Returns `Page { items, total, page, page_size }`.
+Cross-folder query. Under the hood: `UNION ALL` across every
+attached library DB, then order + paginate. Each result row's `id`
+is packed with its `folder_id`.
 
 ### `get_image`
 
@@ -91,10 +116,12 @@ async fn get_image(
 ) -> AppResult<ImageDetails>;
 ```
 
-Returns full details for one image. **Side effect:** if the source
-file's mtime (or any legacy `.xmp` sidecar's mtime) is newer than
-`meta_read_at`, re-reads metadata from disk and updates the DB
-*before* returning.
+Return full details for one image. **Side effect:** if the source
+file's `mtime` is newer than what's stored in the row, the format
+handler is asked to re-read user metadata (title + tags from
+XMP/`System.Keywords`) so that a Lightroom / Explorer edit made
+after import is picked up on next load. Fresh reads only update the
+row if the mtime moved forward; there is no periodic polling.
 
 ### `update_image_metadata`
 
@@ -107,10 +134,10 @@ async fn update_image_metadata(
 ) -> AppResult<ImageDetails>;
 ```
 
-Apply a metadata patch, embed the merged XMP into the source file,
-delete any legacy `.xmp` sidecar, and return the new state. Emits
-`app://image-updated`. Returns `Err` on unsupported formats
-(anything other than JPEG or PNG) or file-write failures.
+Apply a metadata patch to the folder's `library.db` (title, tags,
+`tags_add`, `tags_remove`). **The source file is never touched.**
+Rebuilds the FTS row so subsequent search reflects the change.
+Emits `app://image-updated`.
 
 ### `batch_update_metadata`
 
@@ -123,8 +150,10 @@ async fn batch_update_metadata(
 ) -> AppResult<Vec<i64>>;
 ```
 
-Same as `update_image_metadata` but for many photos. Returns the
-list of IDs that succeeded; failures are logged and skipped.
+Same as `update_image_metadata` but for many photos. `ids` are
+packed globals; the command groups them by folder and touches each
+folder's `library.db` once inside a single transaction. Returns the
+list of `ids` that succeeded; failures are logged and skipped.
 
 ### `delete_images`
 
@@ -138,8 +167,7 @@ async fn delete_images(
 ```
 
 Move to Recycle Bin (default) or permanently delete. Also removes
-any legacy `.xmp` sidecar + thumbnails + DB row. Returns per-file
-success/failure.
+the DB rows and cached thumbnails. Returns per-file success/failure.
 
 ## Tags
 
@@ -152,37 +180,35 @@ async fn list_tags(
 ) -> AppResult<Vec<TagStats>>;
 ```
 
-Every tag with a photo count. Optional prefix filter for
-autocompletion.
+Aggregates tags across every attached library via `UNION ALL`
+grouped by `name COLLATE NOCASE`.
 
 ### `rename_tag`
 
 ```rust
 async fn rename_tag(
     services: State<'_, Arc<AppServices>>,
-    app_handle: AppHandle,
     old_name: String,
     new_name: String,
 ) -> AppResult<()>;
 ```
 
-Global rename across every photo. Rewrites every affected embedded
-XMP packet in the source files.
+Global rename across every available folder. Rebuilds FTS rows for
+every affected image. **Source files are not touched.**
 
 ### `delete_tag`
 
 ```rust
 async fn delete_tag(
     services: State<'_, Arc<AppServices>>,
-    app_handle: AppHandle,
     name: String,
 ) -> AppResult<()>;
 ```
 
-Remove a tag from every photo. Files are updated the same way as
-rename.
+Remove a tag from every folder's library. **Source files are not
+touched.**
 
-## Smart collections (skeleton)
+## Smart collections
 
 ### `list_smart_collections`
 
@@ -211,6 +237,9 @@ async fn delete_smart_collection(
 ) -> AppResult<()>;
 ```
 
+Smart collections live in `registry.db` (they're app-wide, not
+per-folder).
+
 ## Thumbnails and image paths
 
 ### `get_thumb_path`
@@ -223,8 +252,9 @@ async fn get_thumb_path(
 ) -> AppResult<String>;
 ```
 
-Returns the absolute path of a cached thumbnail; generates it on
-demand if missing.
+Return the absolute path of a cached thumbnail; generate on demand
+if missing. Thumbnails are indexed by the *packed global ID* so
+they don't collide between folders.
 
 ### `get_image_path`
 
@@ -235,8 +265,8 @@ async fn get_image_path(
 ) -> AppResult<String>;
 ```
 
-Returns the absolute path of the source image (used by the details
-panel to render a large preview via `convertFileSrc`).
+Absolute path of the source image (folder root + `rel_path`), for
+the DetailsPanel inline preview via `convertFileSrc`.
 
 ## Diagnostics
 

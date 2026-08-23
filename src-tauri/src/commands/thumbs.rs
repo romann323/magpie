@@ -1,14 +1,15 @@
 use crate::core::thumbnail;
 use crate::core::AppServices;
-use crate::db::queries;
+use crate::db::search;
 use crate::error::{AppError, AppResult};
 use crate::types::ThumbSize;
-use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::State;
 
 /// Returns an absolute file path to a thumbnail; the frontend converts
 /// it to an `asset://` URL for display.
+///
+/// `id` is a *packed global ID* (see `db::pack_global_id`).
 #[tauri::command]
 pub async fn get_thumb_path(
     services: State<'_, Arc<AppServices>>,
@@ -16,12 +17,12 @@ pub async fn get_thumb_path(
     size: Option<ThumbSize>,
 ) -> AppResult<String> {
     let size = size.unwrap_or(ThumbSize::Small);
-    let details = queries::get_image_row(&services.db, id)?;
-    let source = PathBuf::from(&details.summary.path);
+    let (_folder_id, _local_id, root, row) = search::get_image_by_gid(&services.pool, id)?
+        .ok_or(AppError::ImageNotFound(id))?;
+    let source = root.join(&row.rel_path);
 
     let path = thumbnail::thumb_path(&services.thumb_cache_dir, id, size);
     if !path.exists() {
-        // Generate on demand
         if let Err(e) =
             thumbnail::ensure_thumbnails(&services.thumb_cache_dir, &source, id)
         {
@@ -42,6 +43,7 @@ pub async fn get_image_path(
     services: State<'_, Arc<AppServices>>,
     id: i64,
 ) -> AppResult<String> {
-    let details = queries::get_image_row(&services.db, id)?;
-    Ok(details.summary.path)
+    let (_folder_id, _local_id, root, row) = search::get_image_by_gid(&services.pool, id)?
+        .ok_or(AppError::ImageNotFound(id))?;
+    Ok(root.join(&row.rel_path).to_string_lossy().to_string())
 }

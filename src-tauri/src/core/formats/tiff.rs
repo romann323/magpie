@@ -1,11 +1,8 @@
-//! TIFF / DNG format handler (read-only for the tag-write path).
+//! TIFF / DNG format handler. Read-only.
 //!
 //! Reads dimensions and EXIF (which lives directly in the TIFF IFDs — no
-//! separate parser needed) and also reads any existing XMP packet in tag
-//! 700 so we can surface pre-existing titles/tags to the user. Writing tags
-//! back into TIFF requires safely rebuilding the IFD chain (each IFD entry
-//! offset would shift if we resize tag 700), which is out of scope for this
-//! milestone; see the top-level `formats` module docs for the plan.
+//! separate parser needed) and any existing XMP packet in tag 700 so
+//! pre-tagged TIFFs import cleanly.
 
 use super::common::{self, TechnicalMeta};
 use super::xmp_packet::{self};
@@ -31,10 +28,6 @@ impl FormatHandler for TiffHandler {
         FormatKind::Image
     }
 
-    fn can_write_tags(&self) -> bool {
-        false
-    }
-
     fn read_technical(&self, path: &Path) -> TechnicalMeta {
         let mut tech = TechnicalMeta::default();
         if let Some((w, h)) = common::read_dimensions(path) {
@@ -54,12 +47,6 @@ impl FormatHandler for TiffHandler {
             }
             None => Ok(UserMeta::default()),
         }
-    }
-
-    fn write_user(&self, _path: &Path, _edits: &UserMeta) -> AppResult<()> {
-        Err(common::write_not_supported_error(
-            "TIFF / DNG",
-        ))
     }
 }
 

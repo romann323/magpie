@@ -26,12 +26,16 @@ pub struct LibraryFolder {
     pub added_at: i64,
     pub last_scan_at: Option<i64>,
     pub image_count: i64,
+    /// `false` when the folder's `.magpie/library.db` couldn't be found
+    /// (removable drive unplugged, network share unreachable, …). The
+    /// folder still appears in the sidebar; the user can rescan when
+    /// the drive comes back.
+    pub is_available: bool,
 }
 
-/// One row in the grid. Only the fields we actually render in the grid
-/// (filename, thumbnail dimensions for placeholder sizing, timestamps for
-/// sorting, title for tooltip) are here. Everything else is fetched on
-/// demand by `get_image`.
+/// One row in the grid. `id` is a *packed global ID*
+/// (`folder_id * 1_000_000_000 + local_id`) so it's unique across every
+/// registered folder.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ImageSummary {
@@ -49,49 +53,22 @@ pub struct ImageSummary {
     pub content_hash: Option<String>,
 }
 
-/// Full detail record served to the DetailsPanel. Includes an ordered list of
-/// read-only technical metadata that each format handler contributes
-/// (dimensions, capture date, camera, GPS, duration, page count, ...).
+/// Full detail record served to the DetailsPanel.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ImageDetails {
     #[serde(flatten)]
     pub summary: ImageSummary,
     pub tags: Vec<String>,
-    pub meta_written_at: Option<i64>,
-    pub meta_read_at: Option<i64>,
-    /// Ordered `[label, value]` pairs of read-only technical metadata for
-    /// the "File info" section of the DetailsPanel. Ordering is determined
-    /// by the format handler.
+    /// Ordered `[label, value]` pairs of read-only technical metadata
+    /// for the "File info" section of the DetailsPanel. Ordering is
+    /// determined by the format handler.
     pub technical: Vec<[String; 2]>,
-    /// Format handler identity (`"jpeg"`, `"png"`, `"webp"`, ...). The UI
-    /// uses this to decide whether tag edits are supported.
+    /// Format handler identity (`"jpeg"`, `"png"`, `"webp"`, ...). The
+    /// UI surfaces it in the "Format metadata" section.
     pub format_handler: String,
-    /// Whether the file's format handler supports writing tags back to the
-    /// file. When false, the UI disables the tag editor with an explanation.
-    pub can_write_tags: bool,
-    /// How Magpie will actually persist title/tags for this file. Distinct
-    /// from `can_write_tags` (which is just the OR of native + shell) so the
-    /// UI can explain *where* the metadata goes without duplicating logic.
-    pub write_mode: WriteMode,
-}
-
-/// Which write path the backend will take for a given file.
-///
-/// Mirrors [`WriteMode`](../../src/types.ts) on the frontend and drives the
-/// hint shown under the Tags editor.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub enum WriteMode {
-    /// A native Magpie format handler embeds directly (JPEG XMP, PNG iTXt,
-    /// WebP, GIF89a). Round-trippable with any other XMP-aware tool.
-    Native,
-    /// Windows Shell property system (RAW families, MP4/MOV, HEIC, TIFF,
-    /// WMV/ASF, JXL/JXR, ...). Same mechanism as Explorer's *Details* tab.
-    Shell,
-    /// Neither native embed nor Shell fallback works. Title and tags live
-    /// in the Magpie library only.
-    LibraryOnly,
+    /// When the row was first imported into the per-folder library DB.
+    pub imported_at: i64,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -168,9 +145,10 @@ pub struct Page<T> {
     pub limit: i64,
 }
 
-/// Patch supplied by the UI for a metadata edit. Title uses double-option so
-/// the caller can distinguish "leave the current title alone" from "clear
-/// the title". Tags fields are simple lists — set/add/remove semantics.
+/// Patch supplied by the UI for a metadata edit. Title uses
+/// double-option so the caller can distinguish "leave the current
+/// title alone" from "clear the title". Tags fields are simple lists —
+/// set/add/remove semantics.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MetadataPatch {
@@ -251,4 +229,17 @@ impl ThumbSize {
             ThumbSize::Large => 640,
         }
     }
+}
+
+/// Result of [`crate::commands::library::check_folder_sync_risk`] —
+/// non-null when the picked folder lives somewhere that could
+/// concurrently be edited from another PC (OneDrive, Dropbox, Google
+/// Drive, iCloud, network share).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncRiskWarning {
+    /// Provider name for the UI copy ("OneDrive", "Dropbox", ...).
+    pub provider: String,
+    /// Full message to show in the confirm dialog.
+    pub message: String,
 }
