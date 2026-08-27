@@ -9,7 +9,7 @@
 
 use crate::core::formats::{win_shell, xmp_packet, FormatRegistry};
 use crate::core::metadata::sidecar::sidecar_path_for;
-use crate::db::queries::ImageMetaFromFile;
+use crate::db::library::ImageMetaFromFile;
 use crate::error::AppResult;
 use std::path::Path;
 

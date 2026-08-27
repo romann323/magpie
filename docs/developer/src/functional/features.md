@@ -8,6 +8,7 @@ to its Tauri command and to the frontend component that drives it.
 | Feature                        | Command                          | Frontend component            |
 | ------------------------------ | -------------------------------- | ----------------------------- |
 | Add a library folder           | `add_library_folder`             | `TopBar`                      |
+| Warn on sync-risk locations    | `check_folder_sync_risk`         | `TopBar` (pre-add dialog)     |
 | Remove a library folder        | `remove_library_folder`          | `Sidebar` (right-click menu)  |
 | List library folders           | `list_library_folders`           | `Sidebar`, `App` bootstrap    |
 | Rescan a single folder         | `rescan_folder`                  | `Sidebar` (right-click menu)  |

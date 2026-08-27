@@ -22,10 +22,6 @@ straight away.
 
 Behind the scenes, Magpie:
 
-- **Remembers the folder in its own database.** Nothing is written
-  inside your folder — the database lives in Magpie's own workshop
-  area (`%APPDATA%\com.magpie.app\magpie.db`). See
-  [Where your data lives](./data-storage.md).
 - **Looks in the folder and every folder inside it.** So adding
   `Pictures` also picks up `Pictures\2020`, `Pictures\Kids`, and so
   on. Video and document files are picked up too — see
@@ -33,23 +29,12 @@ Behind the scenes, Magpie:
 - **Reads the built-in info** each file exposes: dimensions, camera,
   duration, page count, and so on.
 - **Reads any tags or titles** already saved with the file (for
-  example, tags you added earlier in Windows Explorer or Adobe
-  Bridge) and imports them into Magpie's database. This is a
-  one-time import.
+  example, tags you added earlier in Windows Explorer).
 - **Makes small thumbnail previews** for images so the grid loads
   instantly, even for very large libraries.
 
 Your original files are **not moved, renamed, or changed** in any
 way during this. Magpie only reads them.
-
-### If the folder is on OneDrive, Dropbox, or a network share
-
-Any drive works, including OneDrive, Dropbox, iCloud Drive, Google
-Drive, and network shares. Magpie's database is stored on your local
-PC in the Windows AppData folder, so cloud sync clients don't touch
-it. If you use Magpie on more than one PC, each PC has its own
-database — tag edits made on one don't automatically appear on the
-other.
 
 ## Adding more folders
 
@@ -64,14 +49,8 @@ inside that folder.
 
 Right-click the folder name in the sidebar and choose **Remove from
 library**. Magpie forgets about it — but **your files stay on your
-computer, untouched**. If you later add the folder to Magpie again,
-its files are picked up fresh, and any tags that were already saved
-inside the files (from Windows Explorer, Lightroom, or a previous
-Magpie session) are imported one more time. Tags that only lived in
-Magpie's database for that folder are gone with the removal.
-
-Removing a folder from Magpie is not the same as deleting it from
-your PC.
+computer**. Removing a folder from Magpie is not the same as deleting
+it from your PC.
 
 ## Refreshing when files change
 
