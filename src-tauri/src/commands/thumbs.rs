@@ -16,16 +16,15 @@ pub async fn get_thumb_path(
 ) -> AppResult<String> {
     let size = size.unwrap_or(ThumbSize::Small);
     let (row, root) = services
-        .db
+        .db()?
         .with_conn(|conn| queries::get_image_with_root(conn, id))?
         .ok_or(AppError::ImageNotFound(id))?;
     let source = root.join(&row.rel_path);
 
-    let path = thumbnail::thumb_path(&services.thumb_cache_dir, id, size);
+    let cache_dir = services.thumb_cache_dir()?;
+    let path = thumbnail::thumb_path(&cache_dir, id, size);
     if !path.exists() {
-        if let Err(e) =
-            thumbnail::ensure_thumbnails(&services.thumb_cache_dir, &source, id)
-        {
+        if let Err(e) = thumbnail::ensure_thumbnails(&cache_dir, &source, id) {
             tracing::debug!(error = %e, id, "thumb gen on demand failed");
         }
     }
@@ -44,7 +43,7 @@ pub async fn get_image_path(
     id: i64,
 ) -> AppResult<String> {
     let (row, root) = services
-        .db
+        .db()?
         .with_conn(|conn| queries::get_image_with_root(conn, id))?
         .ok_or(AppError::ImageNotFound(id))?;
     Ok(root.join(&row.rel_path).to_string_lossy().to_string())

@@ -47,6 +47,15 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
+    "fileAssociations": [
+      {
+        "ext": ["magpie"],
+        "name": "Magpie Project",
+        "description": "Magpie project file",
+        "role": "Editor",
+        "mimeType": "application/vnd.magpie.project"
+      }
+    ],
     "windows": {
       "webviewInstallMode": {
         "type": "downloadBootstrapper"

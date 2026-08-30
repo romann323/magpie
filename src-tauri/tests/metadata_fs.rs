@@ -9,7 +9,7 @@
 
 use desktop_lib::core::formats::FormatRegistry;
 use desktop_lib::core::metadata::read as meta_read;
-use desktop_lib::db::queries::{self, FileStat, MetadataPatch};
+use desktop_lib::db::queries::{self, FileStat, ImageMetaFromFile, MetadataPatch};
 use desktop_lib::db::Db;
 use std::io::Write;
 use std::path::Path;
@@ -152,9 +152,14 @@ fn central_db_upsert_and_patch_roundtrip() {
         .unwrap()
         .unwrap();
     assert_eq!(row.title.as_deref(), Some("Alpha"));
-    let mut tags = row.tags.clone();
-    tags.sort();
-    assert_eq!(tags, vec!["sunset".to_string(), "vacation".to_string()]);
+    // `MetadataPatch.tags` writes into the user source.
+    let mut user_tags = row.user_tags.clone();
+    user_tags.sort();
+    assert_eq!(
+        user_tags,
+        vec!["sunset".to_string(), "vacation".to_string()]
+    );
+    assert!(row.auto_tags.is_empty());
     assert_eq!(row.folder_id, folder.id);
 
     // Removing the folder should cascade — image + tag join rows go.
@@ -164,6 +169,242 @@ fn central_db_upsert_and_patch_roundtrip() {
         .with_conn(|conn| queries::get_image_row(conn, image_id))
         .unwrap()
         .is_none());
+}
+
+/// Renaming an image updates `filename`, `rel_path`, `ext`, and the
+/// FTS row that indexes the old filename.
+#[test]
+fn rename_image_row_updates_filename_and_fts() {
+    let tmp = tempdir();
+    let db = Db::open(&tmp.join("magpie.db")).unwrap();
+    let folder = db
+        .with_conn(|conn| queries::insert_folder(conn, Path::new(&tmp)))
+        .unwrap();
+    let stat = FileStat {
+        folder_id: folder.id,
+        rel_path: "sub/old.jpg".to_string(),
+        filename: "old.jpg",
+        ext: "jpg",
+        size_bytes: 1,
+        mtime_ms: 1,
+    };
+    let id = db
+        .with_conn(|conn| queries::upsert_image(conn, &stat))
+        .unwrap()
+        .id();
+    db.with_conn_mut(|conn| queries::rename_image_row(conn, id, "new.png"))
+        .expect("rename");
+    let row = db
+        .with_conn(|conn| queries::get_image_row(conn, id))
+        .unwrap()
+        .unwrap();
+    assert_eq!(row.filename, "new.png");
+    assert_eq!(row.rel_path, "sub/new.png");
+    assert_eq!(row.ext, "png");
+}
+
+/// Renaming a second file into a slot already used by another must
+/// fail without touching the DB.
+#[test]
+fn rename_image_row_rejects_collisions() {
+    let tmp = tempdir();
+    let db = Db::open(&tmp.join("magpie.db")).unwrap();
+    let folder = db
+        .with_conn(|conn| queries::insert_folder(conn, Path::new(&tmp)))
+        .unwrap();
+    for name in ["a.jpg", "b.jpg"] {
+        let stat = FileStat {
+            folder_id: folder.id,
+            rel_path: name.to_string(),
+            filename: name,
+            ext: "jpg",
+            size_bytes: 1,
+            mtime_ms: 1,
+        };
+        db.with_conn(|conn| queries::upsert_image(conn, &stat))
+            .unwrap();
+    }
+    let b_id: i64 = db
+        .with_conn(|conn| {
+            Ok(conn
+                .query_row(
+                    "SELECT id FROM images WHERE rel_path = 'b.jpg'",
+                    [],
+                    |r| r.get(0),
+                )
+                .unwrap())
+        })
+        .unwrap();
+    let err = db
+        .with_conn_mut(|conn| queries::rename_image_row(conn, b_id, "a.jpg"))
+        .unwrap_err();
+    assert!(matches!(err, desktop_lib::error::AppError::BadInput(_)));
+}
+
+/// The scanner path (`set_image_meta`) writes automatic tags without
+/// touching the user's typed tags, and never removes anything a
+/// previous scan added. This is the whole point of the `source` split.
+#[test]
+fn scanner_never_wipes_user_tags() {
+    let tmp = tempdir();
+    let db = Db::open(&tmp.join("magpie.db")).unwrap();
+    let folder = db
+        .with_conn(|conn| queries::insert_folder(conn, Path::new(&tmp)))
+        .unwrap();
+    let stat = FileStat {
+        folder_id: folder.id,
+        rel_path: "a.jpg".to_string(),
+        filename: "a.jpg",
+        ext: "jpg",
+        size_bytes: 1,
+        mtime_ms: 1,
+    };
+    let id = db
+        .with_conn(|conn| queries::upsert_image(conn, &stat))
+        .unwrap()
+        .id();
+
+    // 1) First scan writes ["vacation", "sunset"] from the file itself.
+    let scan1 = ImageMetaFromFile {
+        tags: vec!["vacation".into(), "sunset".into()],
+        ..Default::default()
+    };
+    db.with_conn_mut(|conn| queries::set_image_meta(conn, id, &scan1))
+        .unwrap();
+
+    // 2) The user adds "keeper" via the UI and manually types "sunset"
+    //    too — that name is now recorded as *both* auto and user.
+    db.with_conn_mut(|conn| {
+        queries::apply_metadata_patch(
+            conn,
+            id,
+            &MetadataPatch {
+                title: None,
+                tags: Some(vec!["keeper".into(), "sunset".into()]),
+                tags_add: None,
+                tags_remove: None,
+            },
+        )
+    })
+    .unwrap();
+
+    // 3) The user re-edits the file outside Magpie; a rescan now sees
+    //    only ["vacation", "family"] embedded in the file.
+    let scan2 = ImageMetaFromFile {
+        tags: vec!["vacation".into(), "family".into()],
+        ..Default::default()
+    };
+    db.with_conn_mut(|conn| queries::set_image_meta(conn, id, &scan2))
+        .unwrap();
+
+    let row = db
+        .with_conn(|conn| queries::get_image_row(conn, id))
+        .unwrap()
+        .unwrap();
+
+    let mut user = row.user_tags.clone();
+    user.sort();
+    assert_eq!(
+        user,
+        vec!["keeper".to_string(), "sunset".to_string()],
+        "user tags must survive rescans"
+    );
+
+    let mut auto = row.auto_tags.clone();
+    auto.sort();
+    // `sunset` originally came from auto and is still auto after both
+    // rescans (the second scan doesn't list it any more, but we never
+    // delete auto rows). `family` was added by the second scan.
+    // `vacation` was already in auto and doesn't get duplicated.
+    assert_eq!(
+        auto,
+        vec![
+            "family".to_string(),
+            "sunset".to_string(),
+            "vacation".to_string()
+        ]
+    );
+
+    // Aggregated view: everything unique.
+    let mut all = db
+        .with_conn(|conn| queries::tags_for_image(conn, id))
+        .unwrap();
+    all.sort();
+    assert_eq!(
+        all,
+        vec![
+            "family".to_string(),
+            "keeper".to_string(),
+            "sunset".to_string(),
+            "vacation".to_string()
+        ]
+    );
+}
+
+/// UI remove targets `'user'` only; an auto row with the same name
+/// stays put and the tag is still visible via the aggregated view.
+#[test]
+fn user_remove_leaves_auto_row_intact() {
+    let tmp = tempdir();
+    let db = Db::open(&tmp.join("magpie.db")).unwrap();
+    let folder = db
+        .with_conn(|conn| queries::insert_folder(conn, Path::new(&tmp)))
+        .unwrap();
+    let stat = FileStat {
+        folder_id: folder.id,
+        rel_path: "a.jpg".to_string(),
+        filename: "a.jpg",
+        ext: "jpg",
+        size_bytes: 1,
+        mtime_ms: 1,
+    };
+    let id = db
+        .with_conn(|conn| queries::upsert_image(conn, &stat))
+        .unwrap()
+        .id();
+    let scan = ImageMetaFromFile {
+        tags: vec!["beach".into()],
+        ..Default::default()
+    };
+    db.with_conn_mut(|conn| queries::set_image_meta(conn, id, &scan))
+        .unwrap();
+    db.with_conn_mut(|conn| {
+        queries::apply_metadata_patch(
+            conn,
+            id,
+            &MetadataPatch {
+                title: None,
+                tags: None,
+                tags_add: Some(vec!["beach".into()]),
+                tags_remove: None,
+            },
+        )
+    })
+    .unwrap();
+    // Now: auto={beach}, user={beach}. Removing it from user…
+    db.with_conn_mut(|conn| {
+        queries::apply_metadata_patch(
+            conn,
+            id,
+            &MetadataPatch {
+                title: None,
+                tags: None,
+                tags_add: None,
+                tags_remove: Some(vec!["beach".into()]),
+            },
+        )
+    })
+    .unwrap();
+    let row = db
+        .with_conn(|conn| queries::get_image_row(conn, id))
+        .unwrap()
+        .unwrap();
+    assert!(row.user_tags.is_empty(), "user side cleared");
+    assert_eq!(row.auto_tags, vec!["beach".to_string()], "auto stays");
+    let all = db
+        .with_conn(|conn| queries::tags_for_image(conn, id))
+        .unwrap();
+    assert_eq!(all, vec!["beach".to_string()], "aggregated still sees it");
 }
 
 /// FTS survives a rename + delete cycle on a shared tag.

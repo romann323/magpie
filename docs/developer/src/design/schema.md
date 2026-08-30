@@ -49,6 +49,8 @@ PDFs, and documents too.
 | title           | TEXT    | Nullable; user-editable.                                 |
 | imported_at     | INTEGER | Unix ms when the row was first inserted.                 |
 | missing         | INTEGER | 0/1; 1 after a scan that failed to see the file.         |
+| ai_tagged_at    | INTEGER | Nullable; Unix ms of the last successful AI-tag pass.    |
+| ai_tag_hash     | TEXT    | Nullable; fingerprint (`content_hash` or `mtime_ms`) at the time of that pass; the AI pipeline skips a row on re-run when this still matches. |
 
 **UNIQUE:** `(folder_id, rel_path)` — the scanner upserts on this key.
 **Indexes:** `idx_images_folder`, `idx_images_taken_at`,
@@ -65,15 +67,42 @@ Global vocabulary. `"Beach"` and `"beach"` end up in the same row.
 
 ### `image_tags`
 
-Many-to-many join.
+Many-to-many join. Every row records **who attached the tag** via the
+`source` column:
 
-| Column     | Type    | Notes                                     |
-| ---------- | ------- | ----------------------------------------- |
-| image_id   | INTEGER | FK → `images(id)` ON DELETE CASCADE.      |
-| tag_id     | INTEGER | FK → `tags(id)` ON DELETE CASCADE.        |
-| **PK**     |         | `(image_id, tag_id)`.                     |
+- `'auto'` — imported from the file's own metadata (XMP subjects,
+  Windows Shell keywords, sidecar XMP) at scan time.
+- `'user'` — added by the user inside Magpie via the DetailsPanel.
 
-Index: `idx_image_tags_tag(tag_id)`.
+The same `(image, tag)` pair may exist twice — once from each source —
+and the sidebar / FTS index treat them as one tag when aggregating.
+
+| Column     | Type    | Notes                                            |
+| ---------- | ------- | ------------------------------------------------ |
+| image_id   | INTEGER | FK → `images(id)` ON DELETE CASCADE.             |
+| tag_id     | INTEGER | FK → `tags(id)` ON DELETE CASCADE.               |
+| source     | TEXT    | `CHECK (source IN ('auto','user'))`.             |
+| **PK**     |         | `(image_id, tag_id, source)`.                    |
+
+Indexes:
+
+- `idx_image_tags_tag(tag_id)` — vocabulary → images.
+- `idx_image_tags_source(image_id, source)` — one image's tags of a
+  given kind, used by `user_tags_for_image` /
+  `auto_tags_for_image` in `db::queries`.
+
+**Who writes what:**
+
+- The **scanner path** (`db::queries::set_image_meta`, called on scan
+  and on any mtime-triggered re-read) inserts `'auto'` rows only for
+  names the image doesn't already carry (in either source). It never
+  deletes anything, so a user tag survives a rescan even when the
+  file's own metadata no longer mentions it, and an auto tag stays put
+  even if the source file drops it.
+- **User edits** (`db::queries::apply_metadata_patch` from the
+  DetailsPanel) only ever touch `'user'` rows.
+  `MetadataPatch.tagsRemove` deletes the matching `'user'` row and
+  leaves any `'auto'` row alone.
 
 ### `images_fts` (virtual, FTS5)
 
@@ -149,10 +178,26 @@ layer forwards it verbatim; the frontend treats it as opaque.
 
 ## Migrations
 
-`schema_meta.schema_version` is bumped when the schema changes. Only
-version 1 exists today. Future migrations plug into
-`db::schema::apply` between the "existing DB" branch and the "version
-matches" check.
+`schema_meta.schema_version` is bumped when the schema changes.
+`db::schema::apply` runs upgrades one hop at a time; every hop lives
+in its own `migrate_vN_to_vN+1` helper.
+
+Versions:
+
+- **v1** — initial single-DB layout.
+- **v2** — split `image_tags` by provenance. `source TEXT NOT NULL
+  CHECK (source IN ('auto','user'))` is added and the PK becomes
+  `(image_id, tag_id, source)`. Existing rows have no provenance, so
+  the migration marks them all as `'user'`; the next scan adds any
+  `'auto'` rows the format handlers pick up alongside without
+  disturbing user edits.
+- **v3** — add automatic-AI-tagging bookkeeping to `images`:
+  `ai_tagged_at INTEGER` and `ai_tag_hash TEXT`. Both nullable so
+  existing rows migrate in place. The auto-tag pipeline (see
+  [Scanner](./scanner.md) and `core::auto_tag`) writes both columns
+  once per successful classifier pass and compares `ai_tag_hash`
+  against a per-image fingerprint on the next run to decide whether
+  the image can be skipped.
 
 Two legacy on-disk layouts are recognised at startup and imported
 one-shot into `magpie.db`:

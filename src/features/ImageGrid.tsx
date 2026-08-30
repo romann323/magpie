@@ -5,6 +5,7 @@ import { queryImages } from '../ipc'
 import { filterFromView, useStore } from '../store'
 import type { ImageSummary } from '../types'
 import { Thumbnail } from './Thumbnail'
+import { openMagnifierWindow } from './openMagnifierWindow'
 import clsx from 'clsx'
 
 const CELL_MIN_WIDTH = 200
@@ -20,8 +21,12 @@ export function ImageGrid() {
   const extra = useStore((s) => s.extraFilter)
   const selection = useStore((s) => s.selection)
   const select = useStore((s) => s.select)
+  const selectedTags = useStore((s) => s.selectedTags)
 
-  const filter = useMemo(() => filterFromView(view, extra, search), [view, extra, search])
+  const filter = useMemo(
+    () => filterFromView(view, extra, search, selectedTags),
+    [view, extra, search, selectedTags],
+  )
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const [containerWidth, setContainerWidth] = useState(0)
@@ -107,6 +112,10 @@ export function ImageGrid() {
                           : 'replace'
                       select(img.id, mode)
                     }}
+                    onDoubleClick={() => {
+                      select(img.id, 'replace')
+                      void openMagnifierWindow(img.id, filter, sort)
+                    }}
                   />
                 ))}
               </div>
@@ -122,10 +131,12 @@ function Cell({
   img,
   selected,
   onClick,
+  onDoubleClick,
 }: {
   img: ImageSummary
   selected: boolean
   onClick: (e: React.MouseEvent) => void
+  onDoubleClick: () => void
 }) {
   // The button is laid out as a CSS grid: a square thumbnail area (the `1fr`
   // row whose track we constrain via aspect-square on the inner div) plus an
@@ -146,6 +157,8 @@ function Cell({
         gridTemplateRows: 'auto auto',
       }}
       onClick={onClick}
+      onDoubleClick={onDoubleClick}
+      title="Double-click to open magnifier"
     >
       <div className="relative w-full aspect-square bg-surface-hover rounded overflow-hidden">
         <Thumbnail

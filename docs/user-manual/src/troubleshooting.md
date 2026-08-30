@@ -97,21 +97,40 @@ back online.
 
 ## "Save failed" message
 
-**What happens:** After adding a tag, a red **Save failed** message
-appears in the details panel.
+**What happens:** After adding a tag or title, a red **Save failed**
+message appears in the details panel.
 
 **Fix:** Most common causes:
 
-1. **Disk full.** The database is tiny but SQLite needs a few
+1. **Disk full.** The project file is tiny but SQLite needs a few
    kilobytes free to write.
-2. **Another Magpie window is running.** Close the other instance
-   and try again — only one Magpie can safely write to the database
-   at a time on the same PC.
-3. **File permissions on `%APPDATA%`.** Very unusual. If your
-   Windows account can't write to its own `AppData\Roaming` folder,
-   most apps won't work.
+2. **Project file is on a drive that's read-only right now.** If
+   the `.magpie` file lives on an unplugged external drive or a
+   network share that's unreachable, saves will fail. Reconnect and
+   retry.
+3. **Another Magpie window has the same project open.** Close the
+   other instance and try again — only one Magpie can safely write
+   to the same project at a time.
 
 The log file (see below) will tell you exactly what went wrong.
+
+---
+
+## Rename failed
+
+**What happens:** You edit a filename, press Enter, and it snaps back
+with a red error underneath.
+
+**Common reasons:**
+
+- **A file with that name already exists** in the same folder.
+- **The name contains characters Windows won't accept**: `\ / : *
+  ? " < > |`.
+- **The file is locked** by another program (Photoshop, a preview,
+  Explorer's own preview pane). Close the other app and try again.
+
+Just made a rename you regret? **Edit → Undo** (Ctrl + Z) puts the
+old name back.
 
 ---
 
@@ -119,18 +138,18 @@ The log file (see below) will tell you exactly what went wrong.
 
 If Magpie gets into a weird state and you want to start fresh:
 
-1. Close Magpie.
-2. Open File Explorer, paste `%APPDATA%\com.magpie.app` into the
-   address bar, and press Enter.
-3. Delete `magpie.db` (or the whole folder — everything else can be
-   regenerated).
-4. Reopen Magpie. You start with an empty library; re-add your
-   folders. Any tags that were embedded in the files themselves (by
-   Explorer, Bridge, or Lightroom) come back automatically on first
-   scan. Tags you'd only added inside Magpie are gone.
+- **Just this project?** Close it (Project → Close Project), then
+  either delete the `.magpie` file or move it aside, then create a
+  new one. Any tags you'd added inside that project are gone.
+- **Preferences too (theme, font size, recent projects)?** Close
+  Magpie. Open File Explorer, paste `%APPDATA%\com.magpie.app` into
+  the address bar, and delete `app-settings.json`. Your project
+  files themselves stay wherever you saved them.
+- **Everything, including thumbnails and logs?** Delete the whole
+  `%APPDATA%\com.magpie.app` folder. Your project files stay put.
 
-Tip: before step 3, copy `magpie.db` somewhere safe. That single
-file is your whole library backup.
+Tip: back up your `.magpie` file(s) somewhere safe first. That single
+file per project is your whole library backup.
 
 ---
 

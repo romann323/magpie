@@ -5,11 +5,11 @@ import { addLibraryFolder, rescanAll } from '../ipc'
 import { useStore } from '../store'
 import { PRODUCT_NAME } from '../brand'
 import { AppIcon } from '../components/AppIcon'
+import { SearchBox } from './SearchBox'
 import type { ImageSort, SortBy, SortDir } from '../types'
 
 export function TopBar() {
-  const search = useStore((s) => s.search)
-  const setSearch = useStore((s) => s.setSearch)
+  const project = useStore((s) => s.project)
   const sort = useStore((s) => s.sort)
   const setSort = useStore((s) => s.setSort)
   const detailsOpen = useStore((s) => s.detailsOpen)
@@ -55,6 +55,14 @@ export function TopBar() {
       <div className="flex items-center gap-2 pr-3 border-r border-surface-border">
         <AppIcon className="w-6 h-6 rounded shrink-0" />
         <span className="font-semibold tracking-tight">{PRODUCT_NAME}</span>
+        {project && (
+          <span
+            className="text-xs text-slate-400 truncate max-w-[160px] pl-2"
+            title={project.path}
+          >
+            — {project.name}
+          </span>
+        )}
       </div>
 
       <button
@@ -75,14 +83,8 @@ export function TopBar() {
         Rescan
       </button>
 
-      <div className="flex-1 max-w-xl mx-4">
-        <input
-          type="search"
-          className="input"
-          placeholder="Search title, filename, tags…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+      <div className="flex-1 max-w-2xl mx-4">
+        <SearchBox />
       </div>
 
       <div className="flex items-center gap-1 text-slate-400 text-xs">

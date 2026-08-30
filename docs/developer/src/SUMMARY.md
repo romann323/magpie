@@ -34,4 +34,5 @@
 - [File formats](./design/file-formats.md)
 - [Adding a format handler](./design/adding-a-format-handler.md)
 - [Testing strategy](./design/testing.md)
+- [Automatic AI tagging (implementation brief)](./design/auto-tag-implementation.md)
 - [Build and release](./design/build.md)

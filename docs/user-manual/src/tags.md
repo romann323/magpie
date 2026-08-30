@@ -11,29 +11,72 @@ Good tags are things you'd naturally think of later:
 - **Events:** `wedding`, `Christmas-2024`, `hike`.
 - **Feelings:** `favourites`, `funny`, `to-print`.
 
+## Two kinds of tags
+
+Magpie shows tags in **two categories** for every file:
+
+- **Your tags** — words you typed yourself in Magpie. Editable
+  any time.
+- **Automatic tags** — words the file **already had** when Magpie
+  first saw it: keywords from Windows Explorer's Properties dialog,
+  from Adobe Lightroom, from a `.xmp` sidecar next to the file, and
+  so on. When you have
+  [Auto-tag photos](./settings.md#auto-tag-photos) turned on,
+  Magpie's built-in tagger's suggestions **also land here**, next
+  to those, so every read-only, machine-picked tag lives in one
+  place. Shown in the details panel as a read-only row (with a lock
+  icon) so you can see and search on what the file says — but you
+  can't remove them one at a time from Magpie. To change them,
+  edit the file in the tool that wrote them and rescan (for XMP /
+  Explorer keywords), or turn Auto-tag off and use the sidebar's
+  right-click **Delete tag** to sweep an unwanted AI name away
+  everywhere.
+
+Everywhere else — sidebar bubbles, searches, the top-of-window search
+box — Magpie treats both kinds as one. A file tagged `beach`
+appears whether the tag came from you or from the file, and if the
+same word is in both categories it isn't counted twice.
+
+See [Editing metadata → Automatic vs. your
+tags](./editing-metadata.md#automatic-vs-your-tags) for the full
+story.
+
 ## Adding tags
 
 The most detailed walkthrough is in
 [Editing metadata](./editing-metadata.md#adding-tags). In short:
 
-- Click the **Tags** box in the details panel.
+- Click the **Your tags** box in the details panel.
 - Type a word.
 - Press **Space**, **Enter**, or **Comma** to save it.
 
 Repeat as many times as you like. To **remove** a tag, click the
-little **×** on its pill.
+little **×** on its pill. Only **Your tags** can be removed like
+this; automatic tags don't have an × because they live in the
+file itself.
 
 Capital letters don't matter — `Beach` and `beach` are treated as
 the same tag.
 
-## The tag list in the sidebar
+## The tag cloud in the sidebar
 
-Every tag you've ever used shows up in the **Tags** section of the
-sidebar on the left, in alphabetical order. Next to each tag is a
-number — how many files carry that tag.
+Every tag you've ever used appears as a **bubble** in the **Tags**
+section of the sidebar on the left. Bubbles flow across as many rows
+as they need. Each bubble carries the tag name and a small number —
+how many files carry that tag.
 
-- **Click a tag** to filter the grid to only files with that tag.
-- **Right-click a tag** for two options: **Rename** and **Delete**.
+- **Click a bubble** to add that tag to the current search. It turns
+  filled in the accent colour so it's easy to spot.
+- Click **several** bubbles to narrow with AND logic (files must
+  carry *every* selected tag to appear).
+- **Click a filled bubble** again to drop it from the search.
+- **Clear all** in the Tags header deselects every bubble in one
+  click.
+- **Right-click a bubble** for two options: **Rename** and
+  **Delete**.
+
+Selected tags also appear as removable chips in the search box at
+the top of the window — clicking the × on a chip deselects it here.
 
 ## Renaming a tag
 
@@ -69,14 +112,19 @@ your tag list tidy — no more `beach`, `beaches`, `beach`,
 
 ## Do tags show up in other apps?
 
-**No.** Magpie stores every tag in its own database
-(`%APPDATA%\com.magpie.app\magpie.db`); it does not write tags into
-the files themselves. Windows Explorer, Adobe Lightroom, etc. won't
-see tags you added in Magpie.
+**Only the automatic ones.**
+
+- **Your tags** live inside your **project file** (the `.magpie`
+  file you chose the location of). Magpie does not write them into
+  the source files, so Windows Explorer, Adobe Lightroom, etc. won't
+  see them.
+- **Automatic tags** were already stored inside the file by whichever
+  tool put them there, so they're still visible in that tool.
 
 The upside is that Magpie **doesn't modify your files** and every
-file type is fully taggable. The downside is that if you want tags
-to travel with the file (email a JPEG to a friend and keep its tag
-visible in their photo viewer), you need to tag it in Explorer /
-Bridge instead. See
+file type is fully taggable inside Magpie. The downside is that if
+you want tags to travel with the file (email a JPEG to a friend and
+keep its tag visible in their photo viewer), you need to tag it in
+Explorer or Bridge instead — Magpie will then pick that tag up as an
+**automatic** tag on its next scan. See
 [Interoperability with other tools](./interop.md) for the details.

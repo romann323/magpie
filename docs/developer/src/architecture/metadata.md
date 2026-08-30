@@ -7,9 +7,10 @@ invariant that ties them together:
 > **Invariant.** For every file the scanner has seen, the row in
 > `magpie.db` is the single source of truth for user metadata
 > (title + tags). Magpie **never writes back into the source file**.
-> On first scan we read existing tags out of XMP and the Windows
-> Shell property store so the user doesn't lose anything they'd
-> already labelled; from that point on the DB is authoritative.
+> Tags stored in `image_tags` carry a `source` — `'auto'` for the
+> ones Magpie read out of XMP / Windows Shell / sidecars, `'user'`
+> for the ones typed inside Magpie's DetailsPanel. The two are
+> managed independently; see [Schema › image_tags](../design/schema.md#image_tags).
 
 ## The read pipeline
 
@@ -75,13 +76,16 @@ pub struct MetadataPatch {
 ```
 
 `queries::apply_metadata_patch` runs the whole patch in a single
-transaction on `magpie.db`:
+transaction on `magpie.db`. **All tag operations target the `'user'`
+source**; auto rows are never inserted, removed, or renamed here.
 
 1. Update the `images` row title.
-2. If `tags` is set: replace the row's tags.
-3. If `tags_add` is set: insert missing.
-4. If `tags_remove` is set: delete matching.
-5. Rebuild the FTS5 row (DELETE + INSERT).
+2. If `tags` is set: replace the row's **user** tags (auto rows
+   untouched).
+3. If `tags_add` is set: insert missing **user** rows.
+4. If `tags_remove` is set: delete matching **user** rows.
+5. Rebuild the FTS5 row (DELETE + INSERT, `SELECT DISTINCT` over
+   both sources so a name present in both isn't indexed twice).
 6. Commit.
 
 If any step fails, the transaction rolls back. Nothing partially
@@ -111,16 +115,21 @@ if fs_meta.mtime > row.mtime_ms {
 ```
 
 Simple mtime comparison: if the source file changed after Magpie's
-last import, re-read its metadata into the DB. This is how a tag
-added in Windows Explorer becomes visible on next click of that
-file **only for the first mtime bump after import** — because we
-overwrite the DB row from the file. After the first import, Magpie
-edits stay in the DB even if the file changes on disk (Magpie
-doesn't currently detect a *tag-only* Explorer edit vs. a real
-content edit, so `mtime` bumps do wipe Magpie-side tag edits with
-the file's current tags — an intentional trade-off; the DB is the
-source of truth if you want your edits to stick, external tools
-should not be used to tag afterwards).
+last import, re-read its metadata into the DB via
+`queries::set_image_meta`. That path is **additive-only** for tags:
+each name the file currently reports is inserted as `'auto'` unless
+the image already carries it in either source; nothing is ever
+deleted. As a result:
+
+- A tag added in Windows Explorer / Lightroom between scans shows up
+  as a new automatic tag on next click of the file.
+- A tag **removed** from the file between scans stays in the DB
+  (still visible under Automatic tags in the details panel) —
+  we can't tell the difference between "file lost the tag" and
+  "file's own metadata is stale", and the safer default is to keep
+  it.
+- Tags the user typed inside Magpie are always preserved across
+  rescans, regardless of what the file's own metadata says.
 
 ## Windows Shell property store (import-only)
 

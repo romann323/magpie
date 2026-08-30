@@ -4,12 +4,12 @@
 //! Lightroom are still honoured on first scan.
 //!
 //! After the DB redesign this is only called once per file — on scan.
-//! Whatever it returns is written into the per-folder library DB and
-//! never re-read from disk again unless the file's mtime changes.
+//! Whatever it returns is written into `magpie.db` and never re-read
+//! from disk again unless the file's mtime changes.
 
 use crate::core::formats::{win_shell, xmp_packet, FormatRegistry};
 use crate::core::metadata::sidecar::sidecar_path_for;
-use crate::db::library::ImageMetaFromFile;
+use crate::db::queries::ImageMetaFromFile;
 use crate::error::AppResult;
 use std::path::Path;
 

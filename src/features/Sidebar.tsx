@@ -12,6 +12,9 @@ import clsx from 'clsx'
 export function Sidebar() {
   const view = useStore((s) => s.view)
   const setView = useStore((s) => s.setView)
+  const selectedTags = useStore((s) => s.selectedTags)
+  const toggleSelectedTag = useStore((s) => s.toggleSelectedTag)
+  const clearSelectedTags = useStore((s) => s.clearSelectedTags)
   const qc = useQueryClient()
 
   const folders = useQuery({
@@ -47,6 +50,9 @@ export function Sidebar() {
       un.then((fn) => fn()).catch(() => {})
     }
   }, [qc])
+
+  const selectedSet = new Set(selectedTags.map((t) => t.toLowerCase()))
+  const anyTagSelected = selectedTags.length > 0
 
   return (
     <aside className="min-h-0 h-full border-r border-surface-border overflow-y-auto py-3 px-2">
@@ -84,7 +90,7 @@ export function Sidebar() {
               title={
                 f.isAvailable
                   ? f.path
-                  : `${f.path}\n\nThis folder's Magpie library is not reachable right now. Reconnect the drive and rescan to bring it back.`
+                  : `${f.path}\n\nThis folder isn't reachable right now. Reconnect the drive and rescan to bring it back.`
               }
             />
             <button
@@ -103,29 +109,99 @@ export function Sidebar() {
         ))}
       </SidebarSection>
 
-      <SidebarSection title="Tags">
+      <SidebarSection
+        title="Tags"
+        action={
+          anyTagSelected ? (
+            <button
+              className="text-[11px] text-slate-400 hover:text-slate-100 uppercase tracking-wider"
+              onClick={clearSelectedTags}
+              title="Deselect every tag"
+            >
+              Clear all
+            </button>
+          ) : undefined
+        }
+      >
         {(tags.data?.length ?? 0) === 0 && (
           <div className="text-xs text-slate-500 px-2 py-1">No tags yet.</div>
         )}
-        {tags.data?.slice(0, 40).map((t) => (
-          <SidebarItem
-            key={t.name}
-            label={t.name}
-            badge={String(t.count)}
-            active={view.kind === 'tag' && view.name === t.name}
-            onClick={() => setView({ kind: 'tag', name: t.name })}
-          />
-        ))}
+        {(tags.data?.length ?? 0) > 0 && (
+          <div className="flex flex-wrap gap-1.5 px-2 pt-1 pb-1">
+            {tags.data!.slice(0, 200).map((t) => {
+              const checked = selectedSet.has(t.name.toLowerCase())
+              return (
+                <TagBubble
+                  key={t.name}
+                  name={t.name}
+                  count={t.count}
+                  selected={checked}
+                  onToggle={() => toggleSelectedTag(t.name)}
+                />
+              )
+            })}
+          </div>
+        )}
       </SidebarSection>
     </aside>
   )
 }
 
-function SidebarSection({ title, children }: { title: string; children: React.ReactNode }) {
+function TagBubble({
+  name,
+  count,
+  selected,
+  onToggle,
+}: {
+  name: string
+  count: number
+  selected: boolean
+  onToggle: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-pressed={selected}
+      title={`${name} (${count})`}
+      className={clsx(
+        'inline-flex items-center gap-1 max-w-full',
+        'rounded-full border px-2.5 py-0.5 text-xs leading-5',
+        'transition-colors cursor-pointer',
+        selected
+          ? 'bg-accent text-white border-accent hover:bg-accent-hover'
+          : 'bg-surface-raised text-slate-300 border-surface-border hover:bg-surface-hover hover:text-slate-100',
+      )}
+    >
+      <span className="truncate">{name}</span>
+      <span
+        className={clsx(
+          'tabular-nums shrink-0 text-[10px]',
+          selected ? 'text-white/80' : 'text-slate-500',
+        )}
+      >
+        {count}
+      </span>
+    </button>
+  )
+}
+
+function SidebarSection({
+  title,
+  action,
+  children,
+}: {
+  title: string
+  action?: React.ReactNode
+  children: React.ReactNode
+}) {
   return (
     <div className="mb-4">
-      <div className="px-2 pb-1 text-[11px] uppercase tracking-wider text-slate-500">
-        {title}
+      <div className="flex items-center justify-between px-2 pb-1">
+        <div className="text-[11px] uppercase tracking-wider text-slate-500">
+          {title}
+        </div>
+        {action}
       </div>
       <div className="flex flex-col gap-0.5">{children}</div>
     </div>

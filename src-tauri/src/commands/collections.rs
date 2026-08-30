@@ -19,7 +19,7 @@ fn row_to_ipc(r: queries::SmartCollectionRow) -> SmartCollection {
 pub async fn list_smart_collections(
     services: State<'_, Arc<AppServices>>,
 ) -> AppResult<Vec<SmartCollection>> {
-    let rows = services.db.with_conn(queries::list_smart_collections)?;
+    let rows = services.db()?.with_conn(queries::list_smart_collections)?;
     Ok(rows.into_iter().map(row_to_ipc).collect())
 }
 
@@ -31,7 +31,7 @@ pub async fn create_smart_collection(
 ) -> AppResult<SmartCollection> {
     let filter_json = serde_json::to_string(&filter).unwrap_or_else(|_| "{}".into());
     let id = services
-        .db
+        .db()?
         .with_conn(|conn| queries::create_smart_collection(conn, &name, &filter_json))?;
     Ok(SmartCollection {
         id,
@@ -47,6 +47,6 @@ pub async fn delete_smart_collection(
     id: i64,
 ) -> AppResult<()> {
     services
-        .db
+        .db()?
         .with_conn(|conn| queries::delete_smart_collection(conn, id))
 }

@@ -1,10 +1,14 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Capabilities required by the Magpie main window",
-  "windows": ["main"],
+  "description": "Capabilities required by the Magpie main window and the Magnifier popup",
+  "windows": ["main", "magnifier"],
   "permissions": [
     "core:default",
+    "core:webview:allow-create-webview-window",
+    "core:window:allow-close",
+    "core:window:allow-set-focus",
+    "core:window:allow-set-title",
     "dialog:default",
     "opener:default",
     "opener:allow-open-path"

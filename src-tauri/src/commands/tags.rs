@@ -11,7 +11,7 @@ pub async fn list_tags(
     prefix: Option<String>,
 ) -> AppResult<Vec<TagStats>> {
     services
-        .db
+        .db()?
         .with_conn(|conn| queries::list_all_tags(conn, prefix.as_deref()))
 }
 
@@ -24,7 +24,7 @@ pub async fn rename_tag(
     new_name: String,
 ) -> AppResult<()> {
     services
-        .db
+        .db()?
         .with_conn_mut(|conn| queries::rename_tag(conn, &old_name, &new_name))
 }
 
@@ -35,6 +35,6 @@ pub async fn delete_tag(
     name: String,
 ) -> AppResult<()> {
     services
-        .db
+        .db()?
         .with_conn_mut(|conn| queries::delete_tag(conn, &name))
 }

@@ -6,12 +6,14 @@ import {
   deleteImages,
   getImage,
   logFrontend,
+  renameImage,
   toAssetUrl,
   updateImageMetadata,
 } from '../ipc'
-import { useStore } from '../store'
+import { filterFromView, useStore } from '../store'
 import type { ImageDetails, MetadataPatch } from '../types'
 import { TagInput } from './TagInput'
+import { openMagnifierWindow } from './openMagnifierWindow'
 
 export function DetailsPanel() {
   const selection = useStore((s) => s.selection)
@@ -67,6 +69,12 @@ function useDebouncedCallback<T extends (...args: never[]) => void>(
 function SingleDetails({ id, onClose }: { id: number; onClose: () => void }) {
   const qc = useQueryClient()
   const clearSelection = useStore((s) => s.clearSelection)
+  const pushUndo = useStore((s) => s.pushUndo)
+  const view = useStore((s) => s.view)
+  const search = useStore((s) => s.search)
+  const sort = useStore((s) => s.sort)
+  const extraFilter = useStore((s) => s.extraFilter)
+  const selectedTags = useStore((s) => s.selectedTags)
 
   const q = useQuery({
     queryKey: ['image', id],
@@ -82,13 +90,17 @@ function SingleDetails({ id, onClose }: { id: number; onClose: () => void }) {
   const [saveError, setSaveError] = useState<string | null>(null)
 
   const lastLoadedId = useRef<number | null>(null)
+  const lastSavedTitle = useRef<string>('')
+  const lastSavedTags = useRef<string[]>([])
 
   useEffect(() => {
     if (!q.data) return
     if (lastLoadedId.current === q.data.id) return
     lastLoadedId.current = q.data.id
     setTitle(q.data.title ?? '')
-    setTags(q.data.tags)
+    lastSavedTitle.current = q.data.title ?? ''
+    setTags(q.data.userTags)
+    lastSavedTags.current = q.data.userTags
     setSaveError(null)
   }, [q.data])
 
@@ -100,6 +112,7 @@ function SingleDetails({ id, onClose }: { id: number; onClose: () => void }) {
       qc.invalidateQueries({ queryKey: ['images'] })
       qc.invalidateQueries({ queryKey: ['tags'] })
       setSaveError(null)
+      return updated
     } catch (e) {
       console.error('metadata save failed', e)
       const msg =
@@ -109,14 +122,45 @@ function SingleDetails({ id, onClose }: { id: number; onClose: () => void }) {
             ? e
             : JSON.stringify(e)
       setSaveError(msg)
+      throw e
     } finally {
       setSaving(null)
     }
   }
 
+  const commitTitle = async (v: string) => {
+    const prev = lastSavedTitle.current
+    const next = v.trim() === '' ? '' : v
+    if (prev === next) return
+    try {
+      await applyPatch({ title: next === '' ? null : next }, 'title')
+      pushUndo({
+        kind: 'title',
+        id,
+        from: prev === '' ? null : prev,
+        to: next === '' ? null : next,
+      })
+      lastSavedTitle.current = next
+    } catch {
+      /* error surfaced via saveError */
+    }
+  }
+
   const debouncedSaveTitle = useDebouncedCallback((v: string) => {
-    void applyPatch({ title: v.trim() === '' ? null : v }, 'title')
+    void commitTitle(v)
   }, 600)
+
+  const commitTags = async (next: string[]) => {
+    const prev = lastSavedTags.current
+    if (sameStrings(prev, next)) return
+    try {
+      await applyPatch({ tags: next }, 'tags')
+      pushUndo({ kind: 'tags', id, from: prev, to: next })
+      lastSavedTags.current = next
+    } catch {
+      /* error surfaced via saveError */
+    }
+  }
 
   const deleteMutation = useMutation({
     mutationFn: async () => {
@@ -161,7 +205,17 @@ function SingleDetails({ id, onClose }: { id: number; onClose: () => void }) {
         onClose={onClose}
       />
 
-      <div className="bg-black/50 rounded-lg overflow-hidden aspect-video mb-4 relative">
+      <div
+        className="bg-black/50 rounded-lg overflow-hidden aspect-video mb-4 relative cursor-zoom-in"
+        onDoubleClick={() =>
+          void openMagnifierWindow(
+            id,
+            filterFromView(view, extraFilter, search, selectedTags),
+            sort,
+          )
+        }
+        title="Double-click to open magnifier"
+      >
         {isImage ? (
           <img
             src={toAssetUrl(d.path)}
@@ -192,7 +246,7 @@ function SingleDetails({ id, onClose }: { id: number; onClose: () => void }) {
             debouncedSaveTitle(e.target.value)
           }}
           onBlur={() => {
-            void applyPatch({ title: title.trim() === '' ? null : title }, 'title')
+            void commitTitle(title)
           }}
           onKeyDown={(e) => {
             if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
@@ -200,18 +254,21 @@ function SingleDetails({ id, onClose }: { id: number; onClose: () => void }) {
         />
       </Section>
 
-      {/* -------- Section 2: editable tags -------- */}
-      <Section label="Tags">
+      {/* -------- Section 2: editable user tags -------- */}
+      <Section
+        label="Your tags"
+        icon={<PencilIcon />}
+        titleTooltip="Editable. Saved in the Magpie project database — the source file is not touched."
+      >
         <TagInput
           tags={tags}
           onChange={(next) => {
             setTags(next)
-            void applyPatch({ tags: next }, 'tags')
+            void commitTags(next)
           }}
         />
         <div className="text-[11px] text-slate-500 mt-1">
-          Saved in this folder's Magpie library. The original file is not
-          modified.
+          Saved in the Magpie project database. The source file is not modified.
         </div>
         {saveError && (
           <div className="text-[11px] text-red-300 mt-1 whitespace-pre-wrap">
@@ -220,13 +277,30 @@ function SingleDetails({ id, onClose }: { id: number; onClose: () => void }) {
         )}
       </Section>
 
-      {/* -------- Section 3: format-specific editable metadata --------
-       *
-       * We currently expose title + tags for every writable handler.
-       * Format-specific editable metadata (e.g. GPS, description) will land
-       * in this section as those handlers grow their surface area. For now
-       * we show the format handler name so users know which pipeline is
-       * active. */}
+      {/* -------- Section 3: read-only automatic tags --------
+        Always rendered — even when the list is empty — so the
+        distinction between user-editable and read-only tags stays
+        visible on every file, not just the ones that happen to
+        carry embedded metadata. */}
+      <Section
+        label="Automatic tags"
+        icon={<LockIcon />}
+        titleTooltip="Read-only. Imported from the file's own metadata (or added by Magpie's auto-tagger). Edit the file in the tool that wrote them and rescan to change these."
+      >
+        {d.autoTags.length > 0 ? (
+          <ReadOnlyTagList tags={d.autoTags} />
+        ) : (
+          <div className="min-h-[38px] w-full px-2 py-1 rounded-md bg-surface-raised/40 border border-dashed border-surface-border flex items-center text-[11px] text-slate-500 italic cursor-not-allowed">
+            No automatic tags on this file.
+          </div>
+        )}
+        <div className="text-[11px] text-slate-500 mt-1">
+          Read from the file itself when Magpie scanned it. To change
+          them, edit the file in the tool that wrote them and rescan.
+        </div>
+      </Section>
+
+      {/* -------- Section 3: format-specific editable metadata -------- */}
       <Section label="Format metadata">
         <div className="text-xs text-slate-400">
           Handler:{' '}
@@ -234,9 +308,11 @@ function SingleDetails({ id, onClose }: { id: number; onClose: () => void }) {
         </div>
       </Section>
 
-      {/* -------- Section 4: read-only file info -------- */}
+      {/* -------- Section 4: read-only file info + editable filename -------- */}
       <Section label="File info">
-        <ReadOnlyList d={d} />
+        <ReadOnlyList d={d} onFilenameSaved={(from, to) => {
+          if (from !== to) pushUndo({ kind: 'rename', id, from, to })
+        }} />
       </Section>
 
       <div className="mt-4 pt-3 border-t border-surface-border">
@@ -258,26 +334,114 @@ function SingleDetails({ id, onClose }: { id: number; onClose: () => void }) {
   )
 }
 
-function ReadOnlyList({ d }: { d: ImageDetails }) {
-  const baseRows: [string, string | null][] = [
-    ['Filename', d.filename],
-    ['Path', d.path],
-    ['Size', formatBytes(d.sizeBytes)],
-    ['Format', d.ext.toUpperCase()],
-    ['Modified', new Date(d.mtimeMs).toLocaleString()],
-    ['Imported', new Date(d.importedAt).toLocaleString()],
+/**
+ * Read-only file info list. The filename row alone is editable: Enter
+ * commits (via `rename_image`); Escape or blur reverts to the last
+ * saved value.
+ */
+function ReadOnlyList({
+  d,
+  onFilenameSaved,
+}: {
+  d: ImageDetails
+  onFilenameSaved: (from: string, to: string) => void
+}) {
+  const qc = useQueryClient()
+  const [name, setName] = useState(d.filename)
+  const [renameError, setRenameError] = useState<string | null>(null)
+  const [renaming, setRenaming] = useState(false)
+  const originalRef = useRef(d.filename)
+
+  useEffect(() => {
+    setName(d.filename)
+    originalRef.current = d.filename
+    setRenameError(null)
+  }, [d.id, d.filename])
+
+  const commit = async (next: string) => {
+    const trimmed = next.trim()
+    if (trimmed === originalRef.current) {
+      setRenameError(null)
+      return
+    }
+    if (!trimmed) {
+      revert()
+      return
+    }
+    setRenaming(true)
+    setRenameError(null)
+    try {
+      const updated = await renameImage(d.id, trimmed)
+      qc.setQueryData(['image', d.id], updated)
+      qc.invalidateQueries({ queryKey: ['images'] })
+      onFilenameSaved(originalRef.current, updated.filename)
+      originalRef.current = updated.filename
+      setName(updated.filename)
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      setRenameError(msg)
+      revert()
+    } finally {
+      setRenaming(false)
+    }
+  }
+
+  const revert = () => {
+    setName(originalRef.current)
+    setRenameError(null)
+  }
+
+  const baseRows: { label: string; value: React.ReactNode; title?: string }[] = [
+    {
+      label: 'Filename',
+      value: (
+        <div className="flex flex-col gap-1">
+          <input
+            className="input py-1 text-xs"
+            value={name}
+            disabled={renaming}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                void commit(name)
+                ;(e.target as HTMLInputElement).blur()
+              } else if (e.key === 'Escape') {
+                e.preventDefault()
+                revert()
+                ;(e.target as HTMLInputElement).blur()
+              }
+            }}
+            onBlur={() => revert()}
+            title="Enter to rename, Esc to revert"
+          />
+          {renameError && (
+            <span className="text-red-300 text-[11px] whitespace-pre-wrap">
+              {renameError}
+            </span>
+          )}
+        </div>
+      ),
+    },
+    { label: 'Path', value: d.path, title: d.path },
+    { label: 'Size', value: formatBytes(d.sizeBytes) },
+    { label: 'Format', value: d.ext.toUpperCase() },
+    { label: 'Modified', value: new Date(d.mtimeMs).toLocaleString() },
+    { label: 'Imported', value: new Date(d.importedAt).toLocaleString() },
   ]
-  const techRows: [string, string | null][] = (d.technical ?? []).map(
-    ([k, v]) => [k, v],
-  )
+  const techRows = (d.technical ?? []).map(([k, v]) => ({
+    label: k,
+    value: v,
+    title: v ?? '',
+  }))
   const rows = [...baseRows, ...techRows]
   return (
     <dl className="grid grid-cols-[130px_1fr] gap-y-1 text-xs">
-      {rows.map(([k, v], i) => (
-        <div key={`${k}-${i}`} className="contents">
-          <dt className="text-slate-500">{k}</dt>
-          <dd className="text-slate-300 truncate" title={String(v ?? '')}>
-            {v ?? <span className="text-slate-600">—</span>}
+      {rows.map((r, i) => (
+        <div key={`${r.label}-${i}`} className="contents">
+          <dt className="text-slate-500 self-center">{r.label}</dt>
+          <dd className="text-slate-300 truncate" title={r.title ?? ''}>
+            {r.value ?? <span className="text-slate-600">—</span>}
           </dd>
         </div>
       ))}
@@ -429,17 +593,46 @@ function MultiDetails({ ids, onClose }: { ids: number[]; onClose: () => void }) 
   )
 }
 
+function ReadOnlyTagList({ tags }: { tags: string[] }) {
+  return (
+    <div
+      className="min-h-[38px] w-full px-2 py-1 rounded-md bg-surface-raised/40 border border-dashed border-surface-border flex flex-wrap items-center gap-1 cursor-not-allowed"
+      aria-readonly="true"
+      title="Read-only — imported from the file's own metadata"
+    >
+      {tags.map((t) => (
+        <span
+          key={t}
+          className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-slate-500/10 border border-slate-500/40 text-slate-400 text-xs select-text"
+          title="Read-only tag"
+        >
+          <LockIcon size={10} />
+          {t}
+        </span>
+      ))}
+    </div>
+  )
+}
+
 function Section({
   label,
   children,
+  icon,
+  titleTooltip,
 }: {
   label: string
   children: React.ReactNode
+  icon?: React.ReactNode
+  titleTooltip?: string
 }) {
   return (
     <div className="mb-4 pb-3 border-b border-surface-border last:border-b-0 last:pb-0 last:mb-3">
-      <div className="text-[11px] uppercase tracking-wider text-slate-500 mb-1.5">
-        {label}
+      <div
+        className="text-[11px] uppercase tracking-wider text-slate-500 mb-1.5 flex items-center gap-1.5"
+        title={titleTooltip}
+      >
+        {icon}
+        <span>{label}</span>
       </div>
       {children}
     </div>
@@ -463,10 +656,56 @@ function isImagePreviewable(ext: string): boolean {
   return ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp', 'svg', 'avif'].includes(e)
 }
 
+function sameStrings(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false
+  }
+  return true
+}
+
 function TrashIcon() {
   return (
     <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" />
+    </svg>
+  )
+}
+
+function LockIcon({ size = 12 }: { size?: number }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="4" y="11" width="16" height="10" rx="2" />
+      <path d="M8 11V7a4 4 0 018 0v4" />
+    </svg>
+  )
+}
+
+function PencilIcon({ size = 12 }: { size?: number }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4 12.5-12.5z" />
     </svg>
   )
 }

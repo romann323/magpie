@@ -7,11 +7,45 @@
     height: 100%;
     margin: 0;
   }
+  html {
+    /* Overridden by the Settings → Font Size dialog. */
+    font-size: 14px;
+  }
+  html.font-size-small  { font-size: 13px; }
+  html.font-size-medium { font-size: 14px; }
+  html.font-size-large  { font-size: 16px; }
+
   body {
     @apply bg-surface text-slate-200 font-sans antialiased;
     color-scheme: dark;
     overscroll-behavior: none;
   }
+
+  /* --------- Light-theme overrides ---------
+     Tailwind's palette is baked into the class names, so we override the
+     handful of "surface" swatches used across the app when the user picks
+     Settings → Theme → Light. Accent colour is left unchanged so brand
+     accents stay recognisable in both themes. */
+  html.theme-light {
+    color-scheme: light;
+  }
+  html.theme-light body {
+    background: #ffffff;
+    color: #0f172a;
+  }
+  html.theme-light .bg-surface { background-color: #ffffff !important; }
+  html.theme-light .bg-surface-raised { background-color: #f8fafc !important; }
+  html.theme-light .bg-surface-hover { background-color: #eef2f7 !important; }
+  html.theme-light .border-surface-border { border-color: #e2e8f0 !important; }
+  html.theme-light .text-slate-200 { color: #0f172a !important; }
+  html.theme-light .text-slate-300 { color: #1e293b !important; }
+  html.theme-light .text-slate-400 { color: #475569 !important; }
+  html.theme-light .text-slate-500 { color: #64748b !important; }
+  html.theme-light .text-slate-600 { color: #94a3b8 !important; }
+  html.theme-light .placeholder-slate-500::placeholder { color: #94a3b8 !important; }
+  html.theme-light ::-webkit-scrollbar-thumb { background: #cbd5e1; }
+  html.theme-light ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
   ::selection {
     background: rgba(99, 102, 241, 0.35);
   }
@@ -70,5 +104,14 @@
   }
   .sidebar-item.active {
     @apply bg-accent/15 text-accent border border-accent/30;
+  }
+  .modal-backdrop {
+    @apply fixed inset-0 z-40 bg-black/70;
+  }
+  .modal-panel {
+    @apply fixed inset-0 z-50 grid place-items-center pointer-events-none;
+  }
+  .modal-card {
+    @apply pointer-events-auto card p-4 w-[420px] max-w-[90vw] shadow-xl;
   }
 }

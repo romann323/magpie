@@ -54,12 +54,22 @@ pub struct ImageSummary {
 }
 
 /// Full detail record served to the DetailsPanel.
+///
+/// Tags are split by provenance so the right pane can show them
+/// distinctly: `userTags` are the ones the user typed inside Magpie
+/// and are editable; `autoTags` were read from the file's own
+/// metadata at scan time and are read-only. The same name can appear
+/// in both vectors if both sources carry it.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ImageDetails {
     #[serde(flatten)]
     pub summary: ImageSummary,
-    pub tags: Vec<String>,
+    /// Tags added by the user inside Magpie. Editable from the UI.
+    pub user_tags: Vec<String>,
+    /// Tags picked up by the scanner from the file itself (XMP
+    /// subjects, Windows Shell keywords, sidecar XMP). Read-only.
+    pub auto_tags: Vec<String>,
     /// Ordered `[label, value]` pairs of read-only technical metadata
     /// for the "File info" section of the DetailsPanel. Ordering is
     /// determined by the format handler.
@@ -204,6 +214,47 @@ pub struct ScanResult {
     pub errors: i64,
 }
 
+// ---------- Automatic AI tagging ----------
+
+/// Progress emitted on the `app://auto-tag` event, mirroring
+/// [`ScanProgress`]. Sent every few images so the status bar can
+/// update without flooding IPC.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AutoTagProgress {
+    pub folder_id: i64,
+    pub processed: i64,
+    pub total: i64,
+    pub current_path: Option<String>,
+    /// Cumulative count of tags this run has attached across all
+    /// images so far.
+    pub tags_added: i64,
+    /// Number of images the run skipped because their fingerprint
+    /// still matched the previous AI-tag pass.
+    pub skipped: i64,
+    pub finished: bool,
+}
+
+/// Summary returned when [`crate::core::auto_tag::tag_folder`] finishes.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AutoTagResult {
+    pub folder_id: i64,
+    pub processed: i64,
+    pub skipped: i64,
+    pub tagged_images: i64,
+    pub tags_added: i64,
+    pub errors: i64,
+}
+
+/// One tag suggested by the classifier. `confidence` is `0.0..=1.0`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TagSuggestion {
+    pub name: String,
+    pub confidence: f32,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SmartCollection {
@@ -229,5 +280,22 @@ impl ThumbSize {
             ThumbSize::Large => 640,
         }
     }
+}
+
+/// State the main window hands to the Magnifier popup so the popup
+/// knows which image to show first and can walk through the exact same
+/// list (same filter / sort) the main grid is showing.
+///
+/// Kept as a small serialisable struct on `AppServices` rather than
+/// baked into the URL so we don't have to serialise `ImageFilter` /
+/// `ImageSort` into query strings.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MagnifierContext {
+    pub image_id: Option<i64>,
+    #[serde(default)]
+    pub filter: ImageFilter,
+    #[serde(default)]
+    pub sort: ImageSort,
 }
 

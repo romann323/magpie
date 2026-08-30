@@ -128,14 +128,12 @@ pub async fn scan_folder(
     let seen_set = Arc::try_unwrap(seen)
         .map(|m| m.into_inner().unwrap())
         .unwrap_or_else(|arc| arc.lock().unwrap().clone());
-    let removed = services
-        .db
-        .with_conn_mut(|conn| queries::mark_missing_by_seen(conn, folder_id, &seen_set))?;
+    let db = services.db()?;
+    let removed =
+        db.with_conn_mut(|conn| queries::mark_missing_by_seen(conn, folder_id, &seen_set))?;
 
     let now = chrono::Utc::now().timestamp_millis();
-    let _ = services
-        .db
-        .with_conn(|conn| queries::set_last_scan_at(conn, folder_id, now));
+    let _ = db.with_conn(|conn| queries::set_last_scan_at(conn, folder_id, now));
 
     let result = ScanResult {
         folder_id,
@@ -239,9 +237,8 @@ fn process_one(
         mtime_ms,
     };
 
-    let outcome = services
-        .db
-        .with_conn(|conn| queries::upsert_image(conn, &stat))?;
+    let db = services.db()?;
+    let outcome = db.with_conn(|conn| queries::upsert_image(conn, &stat))?;
 
     let (image_id, changed) = match &outcome {
         UpsertOutcome::Added { id } => (*id, true),
@@ -252,9 +249,7 @@ fn process_one(
     if changed {
         match meta_read::read_all(&services.formats, path) {
             Ok(meta) => {
-                services
-                    .db
-                    .with_conn_mut(|conn| queries::set_image_meta(conn, image_id, &meta))?;
+                db.with_conn_mut(|conn| queries::set_image_meta(conn, image_id, &meta))?;
             }
             Err(e) => {
                 tracing::debug!(?path, error = %e, "metadata read failed");
@@ -262,8 +257,15 @@ fn process_one(
         }
     }
 
-    if let Err(e) = thumbnail::ensure_thumbnails(&services.thumb_cache_dir, path, image_id) {
-        tracing::debug!(?path, error = %e, "thumbnail gen failed");
+    match services.thumb_cache_dir() {
+        Ok(dir) => {
+            if let Err(e) = thumbnail::ensure_thumbnails(&dir, path, image_id) {
+                tracing::debug!(?path, error = %e, "thumbnail gen failed");
+            }
+        }
+        Err(e) => {
+            tracing::debug!(?path, error = %e, "thumbnail gen skipped (no project)");
+        }
     }
 
     Ok(match outcome {

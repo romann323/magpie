@@ -60,7 +60,8 @@ export interface ImageDetails {
   path: string          // absolute (folder root + rel_path)
   filename: string
   // ...
-  tags: string[]
+  userTags: string[]    // typed by the user inside Magpie
+  autoTags: string[]    // read from the file at scan time
   title: string | null
   importedAt: number    // when the row was first inserted
   technical: Array<[string, string]>

@@ -10,10 +10,15 @@ Magpie/
 │  ├─ store.ts                         # Zustand global UI state
 │  ├─ types.ts                         # Mirrors Rust types
 │  └─ features/
-│     ├─ TopBar.tsx                    # Top-of-window: add folder, rescan, search, sort
-│     ├─ Sidebar.tsx                   # Left: library / tag filters
-│     ├─ ImageGrid.tsx                 # Virtualised file grid
-│     ├─ DetailsPanel.tsx              # Right: SingleDetails / MultiDetails (Title / Tags / Format / Info)
+│     ├─ TopBar.tsx                    # Top-of-window: add folder, rescan, SearchBox, sort
+│     ├─ Sidebar.tsx                   # Left: library / folder / tag multi-select
+│     ├─ SearchBox.tsx                 # Chips (tags) + free-text FTS input
+│     ├─ ImageGrid.tsx                 # Virtualised file grid (double-click → Magnifier window)
+│     ├─ DetailsPanel.tsx              # Right: SingleDetails / MultiDetails (Title / Tags / Format / Info + editable filename)
+│     ├─ MagnifierWindow.tsx           # Root component of the separate Magnifier pop-up window
+│     ├─ openMagnifierWindow.ts        # Helper that spawns/focuses that window
+│     ├─ WelcomeScreen.tsx             # Shown when no project is open
+│     ├─ SettingsDialogs.tsx           # Theme / Font-size / Language modals
 │     ├─ TagInput.tsx                  # Tag entry with autocompletion
 │     ├─ Thumbnail.tsx                 # <img> wrapper with async src
 │     └─ StatusBar.tsx                 # Bottom: scan progress, app version
@@ -32,16 +37,18 @@ Magpie/
 │  └─ src/
 │     ├─ main.rs                       # Windows subsystem entry — calls lib::run
 │     ├─ lib.rs                        # Tauri builder, logging, handler registration
+│     ├─ menu.rs                       # Native menu bar + menu-event bridge
 │     ├─ error.rs                      # AppError, AppResult
 │     ├─ types.rs                      # Rust-side IPC types (mirror src/types.ts)
 │     ├─ db/
 │     │  ├─ mod.rs                     # Db handle (Arc<Mutex<Connection>>)
 │     │  ├─ schema.rs                  # Apply schema.sql on fresh DBs
-│     │  ├─ schema.sql                 # DDL for magpie.db
-│     │  ├─ queries.rs                 # All SQL against magpie.db
+│     │  ├─ schema.sql                 # DDL for a project DB
+│     │  ├─ queries.rs                 # All SQL against the project DB
 │     │  └─ migrate.rs                 # One-shot import from legacy DB layouts
 │     ├─ core/
-│     │  ├─ mod.rs                     # AppServices, FormatRegistry, dirs
+│     │  ├─ mod.rs                     # AppServices (holds ProjectState + AppSettings)
+│     │  ├─ project.rs                 # Projects + AppSettings persistence
 │     │  ├─ scanner.rs                 # Parallel folder scan (writes rel_paths)
 │     │  ├─ thumbnail.rs               # Thumb generation + caching (keyed by image_id)
 │     │  ├─ formats/                   # Per-format handlers, all read-only
@@ -61,9 +68,12 @@ Magpie/
 │     │     └─ sidecar.rs              # Legacy `.xmp` reader (never writes)
 │     └─ commands/                     # Tauri command handlers
 │        ├─ mod.rs
+│        ├─ project.rs                 # current/create/open/save[_as]/close
+│        ├─ settings.rs                # get/update app settings JSON
 │        ├─ library.rs                 # add/remove/list folders, rescan
-│        ├─ images.rs                  # query, get, update, batch_update, delete
+│        ├─ images.rs                  # query, get, update, batch_update, delete, rename
 │        ├─ tags.rs                    # list / rename / delete tags
+│        ├─ magnifier.rs               # Magnifier window context (get/set)
 │        ├─ collections.rs             # smart collections (skeleton in v1)
 │        ├─ thumbs.rs                  # thumb + asset path resolvers
 │        └─ diag.rs                    # log_frontend bridge

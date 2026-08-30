@@ -31,7 +31,13 @@ pub const DB_FILE_NAME: &str = "magpie.db";
 
 /// Current schema version. Bump when adding a migration inside
 /// [`schema::apply`] / a future `migrate_up` helper.
-pub const SCHEMA_VERSION: i64 = 1;
+///
+/// - v1: initial single-DB layout.
+/// - v2: `image_tags.source` column ('auto' | 'user'); PK becomes
+///   `(image_id, tag_id, source)`.
+/// - v3: `images.ai_tagged_at` and `images.ai_tag_hash` columns for
+///   automatic-AI-tagging bookkeeping.
+pub const SCHEMA_VERSION: i64 = 3;
 
 /// Thread-safe handle to Magpie's single SQLite database.
 ///

@@ -12,6 +12,9 @@ pub enum AppError {
     #[error("connection pool error: {0}")]
     Pool(String),
 
+    #[error("no project is open")]
+    NoProjectOpen,
+
     #[error("path does not exist: {0}")]
     PathNotFound(String),
 
@@ -66,6 +69,7 @@ impl Serialize for AppError {
             AppError::Io(_) => "io",
             AppError::Db(_) => "db",
             AppError::Pool(_) => "pool",
+            AppError::NoProjectOpen => "no_project_open",
             AppError::PathNotFound(_) => "path_not_found",
             AppError::NotADirectory(_) => "not_a_directory",
             AppError::ImageNotFound(_) => "image_not_found",

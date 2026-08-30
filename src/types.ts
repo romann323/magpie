@@ -46,9 +46,18 @@ export type ImageSummary = {
  *
  * `importedAt` is the timestamp (ms since epoch) the row was first added to
  * the central Magpie DB.
+ *
+ * Tags are split by provenance so the right pane can show them
+ * distinctly:
+ * - `userTags` — added by the user inside Magpie, editable.
+ * - `autoTags` — imported from the file's own metadata (XMP subjects,
+ *   Windows Shell keywords, sidecar XMP) at scan time, read-only.
+ *
+ * The same name can appear in both lists if both sources carry it.
  */
 export type ImageDetails = ImageSummary & {
-  tags: string[]
+  userTags: string[]
+  autoTags: string[]
   technical: Array<[string, string]>
   formatHandler: string
   importedAt: number
@@ -109,6 +118,23 @@ export type ScanResult = {
   errors: number
 }
 
+/**
+ * Progress payload of `app://auto-tag`. Mirrors `ScanProgress` and is
+ * emitted by the automatic-AI-tagging pipeline as it works through a
+ * folder that was just added / rescanned.
+ */
+export type AutoTagProgress = {
+  folderId: number
+  processed: number
+  total: number
+  currentPath: string | null
+  /** Cumulative count of tags this run has attached across all images so far. */
+  tagsAdded: number
+  /** Number of images this run skipped because they were already tagged and unchanged. */
+  skipped: number
+  finished: boolean
+}
+
 export type SmartCollection = {
   id: number
   name: string
@@ -132,4 +158,51 @@ export type ThumbSize = 'small' | 'medium' | 'large'
 export type AppError = {
   code: string
   message: string
+}
+
+// ---------- Projects & app settings ----------
+
+export type ProjectInfo = {
+  path: string
+  name: string
+}
+
+export type Theme = 'system' | 'dark' | 'light'
+export type FontSize = 'small' | 'medium' | 'large'
+
+export type AppSettings = {
+  theme: Theme
+  fontSize: FontSize
+  language: string
+  lastProjectPath: string | null
+  recentProjects: string[]
+  /**
+   * When true, Magpie automatically runs AI-based tag assignment on
+   * every image in a library folder immediately after the folder's
+   * filesystem scan finishes. Toggled via **Settings → Auto-tag
+   * photos**.
+   */
+  aiAutoTag: boolean
+}
+
+export type AppSettingsPatch = Partial<
+  Pick<AppSettings, 'theme' | 'fontSize' | 'language' | 'aiAutoTag'>
+>
+
+// ---------- Menu ----------
+
+/** Payload of the `app://menu` event: the ID of the clicked item. */
+export type MenuEventId = string
+
+// ---------- Magnifier ----------
+
+/**
+ * Context handed from the main window to the Magnifier popup: which
+ * image to show first, plus the filter and sort of the list the
+ * magnifier should walk when the user presses ← / →.
+ */
+export type MagnifierContext = {
+  imageId: number | null
+  filter: ImageFilter
+  sort: ImageSort
 }

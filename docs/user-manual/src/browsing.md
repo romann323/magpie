@@ -11,7 +11,8 @@ Even with tens of thousands of files, it stays smooth to scroll.
 - **Ctrl + click** more files to add them to the selection.
 - **Shift + click** somewhere else in the grid to grab everything
   between the first and the new click.
-- **Ctrl + A** picks every file currently shown.
+- **Double-click** a file to open the [Magnifier](./magnifier.md) —
+  a full-window viewer for browsing pictures one by one.
 - **Esc** unpicks everything.
 
 The number of selected files is shown in the panel on the right and
@@ -54,19 +55,22 @@ into a batch mode — see
 
 ## The sidebar filters
 
-The list on the left is a set of filters — clicking one narrows down
-the grid to just matching files.
+The list on the left is a set of filters — clicking (or ticking)
+narrows down the grid to matching files.
 
 - **Library › Folders**: show only files from one specific folder on
   your computer.
-- **Tags**: show only files with a specific tag. The number next to
-  each tag is how many files have that tag.
+- **Tags**: **click a tag bubble** to add it to the search. Click
+  several bubbles to narrow with AND logic (a file has to have every
+  selected tag to appear). The tiny number inside each bubble is how
+  many files carry that tag. Click **Clear all** in the Tags header
+  to deselect every bubble in one go.
 
-Filters stack. Click a folder **and** a tag and you see only files
-that match both. Add words to the search box at the top for even
-finer results.
+Filters stack. Click a folder **and** select some tag bubbles **and**
+type text in the search box — Magpie shows the intersection.
 
 ## Clearing filters
 
-Click **All photos** at the top of the sidebar to start fresh —
-every filter is cleared in one click.
+Click **All photos** at the top of the sidebar to reset the folder
+filter. Use **Clear all** in the Tags header to un-tick every tag.
+Clear the search box to drop any typed-text filter.

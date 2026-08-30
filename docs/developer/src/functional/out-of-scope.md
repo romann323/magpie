@@ -12,10 +12,17 @@ and a rough entry point for the future contributor picking it up.
 
 ## Face and object recognition
 
-- **No auto-tagging based on ML models.** The privacy story is
-  simpler when no images ever run through an ML pipeline. Future
-  work could offer optional local inference (e.g. running an ONNX
-  model against a batch of photos) with a clear opt-in flow.
+- **Automatic tagging is now shipping as an opt-in, local-only
+  stub** — see [Scanner → Auto-tag pass](../design/scanner.md) and
+  `core::auto_tag`. Toggle **Settings → Auto-tag photos** to enable
+  it; the pipeline runs after every folder-add scan and writes the
+  suggestions as user tags via `apply_metadata_patch`. Phase 1 ships
+  a deterministic `MockClassifier` (no ML model bundled). A real
+  ONNX / CLIP sidecar can plug into the same `ImageClassifier`
+  trait later without touching the caller.
+- Face recognition specifically is still out of scope — the trait
+  doesn't currently expose bounding boxes and the DB has no notion
+  of a "person" separate from a tag.
 
 ## Cloud sync
 

@@ -2,5 +2,8 @@ pub mod collections;
 pub mod diag;
 pub mod images;
 pub mod library;
+pub mod magnifier;
+pub mod project;
+pub mod settings;
 pub mod tags;
 pub mod thumbs;

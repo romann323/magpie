@@ -27,30 +27,34 @@ mean anything is wrong.
 
 ## The very first time you open it
 
-When you first start Magpie you'll see:
+When you first start Magpie you'll see a friendly welcome screen with
+two buttons in the middle of the window:
 
-- An empty window with a friendly **"Add folder"** button.
-- The status bar at the bottom saying **Idle**.
+- **New Project…** — creates a fresh empty project. You pick where
+  to save it and what to call it (e.g. `Documents\Family.magpie`).
+- **Open Project…** — opens an existing `.magpie` file.
 
-Nothing is scanned yet. Nothing is stored yet. Magpie is waiting for
-you to point it at a folder.
+Pick **New Project**, save it somewhere sensible, and Magpie opens
+into its normal three-panel layout. From then on, that project
+re-opens automatically every time you launch. See
+[Projects](./projects.md) for more.
 
-The [next chapter](./adding-folder.md) walks you through that in
-detail.
+Once the project is open the next step is to
+[add a folder](./adding-folder.md) full of files to scan.
 
 ## What Magpie creates on your computer
 
-Magpie keeps its own little workshop in a hidden Windows folder. You
-don't need to open it or think about it — but if you're curious, it's
-here:
+Magpie keeps a small workshop of its own in a hidden Windows folder:
 
 ```
 C:\Users\<you>\AppData\Roaming\com.magpie.app\
 ```
 
-That folder contains Magpie's own database (an index of the files it
-knows about) and small thumbnail previews. **None of your original
-files live there** — they stay exactly where you put them.
+That folder contains Magpie's preferences (`app-settings.json`, which
+remembers your recent projects and theme choices) and small thumbnail
+previews. **None of your original files live there** — they stay
+exactly where you put them — and your **project files live wherever
+you saved them**.
 
 ## Uninstalling
 
@@ -58,7 +62,7 @@ files live there** — they stay exactly where you put them.
   find Magpie, and click **Uninstall**.
 - Portable version? Just delete `desktop.exe`.
 
-To also wipe Magpie's own files, delete the hidden folder above (in
-File Explorer, paste `%APPDATA%\com.magpie.app` into the address
-bar). **Your files and any tags you added to writable formats are
-safe** — those live in your folders, not in Magpie's workshop.
+To also wipe Magpie's cache and preferences, delete the hidden folder
+above (in File Explorer, paste `%APPDATA%\com.magpie.app` into the
+address bar). **Your project files aren't in there** unless you chose
+that location for them — they stay wherever you saved them.

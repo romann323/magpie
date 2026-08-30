@@ -45,7 +45,8 @@ cargo test --lib
 
 ## L3 — Rust integration tests
 
-`src-tauri/tests/metadata_fs.rs` exercises the full pipeline on
+`src-tauri/tests/metadata_fs.rs` and
+`src-tauri/tests/auto_tag.rs` exercise the full pipeline on
 temporary directories:
 
 | Test                                              | Verifies                                            |
@@ -64,12 +65,47 @@ temporary directories:
 | `write_errors_on_unsupported_format`              | Saving on RAW returns `Err`, no sidecar fallback.   |
 | `registry_recognises_every_expected_extension`    | Every advertised handler is registered.             |
 
+`auto_tag.rs` covers the automatic-AI-tagging DB primitives using
+the shipped [`MockClassifier`]:
+
+| Test                                        | Verifies                                                        |
+| ------------------------------------------- | --------------------------------------------------------------- |
+| `first_pass_tags_every_image`               | Every candidate gets user tags + an `ai_tag_hash` on the row.   |
+| `second_pass_skips_unchanged_images`        | Rerun on an unchanged folder is a no-op.                        |
+| `changed_fingerprint_reclassifies`          | Bumping `mtime_ms` invalidates the fingerprint and re-triggers. |
+| `ai_tags_land_as_auto_and_coexist_with_scanner`| AI tags land under `'auto'` (never `'user'`); existing user tags and XMP-derived auto tags survive the pass without duplication. |
+| `candidates_include_never_tagged_rows`      | Migration path: NULL `ai_tag_hash` rows still surface.          |
+
 Run:
 
 ```powershell
 cd src-tauri
 cargo test --test metadata_fs
+cargo test --test auto_tag
 ```
+
+### Testing the auto-tag pipeline end-to-end
+
+The mock classifier lets you exercise the full
+`add_library_folder` → scan → auto-tag → `app://auto-tag` chain
+without any ML dependencies:
+
+1. Launch Magpie and open (or create) a project.
+2. **Settings → Auto-tag photos** — verify the label gains a
+   trailing ✓.
+3. Add a folder with a handful of JPEGs. The status bar shows the
+   scan line first, then the auto-tag line (green bar).
+4. Open one of the newly-scanned images. Two tags from the
+   `MockClassifier` vocabulary (`landscape`, `portrait`, `indoor`,
+   `outdoor`, `day`, `night`, `nature`, `city`, `water`, `food`,
+   `people`, `animal`) appear in **Automatic tags** (read-only,
+   with the lock affordance), not in **Your tags**.
+5. Re-add the same folder (after `remove_library_folder`) — the
+   second run's status bar reports zero new tags because every row
+   still matches its `ai_tag_hash` fingerprint.
+6. Turn **Settings → Auto-tag photos** off and add another folder:
+   the scan runs but no `app://auto-tag` event fires and the DB's
+   `ai_tagged_at` column stays NULL.
 
 ## L4 — screenshot smoke tests
 

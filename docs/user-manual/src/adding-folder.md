@@ -36,6 +36,14 @@ Behind the scenes, Magpie:
 Your original files are **not moved, renamed, or changed** in any
 way during this. Magpie only reads them.
 
+**If you turned on [Auto-tag photos](./settings.md#auto-tag-photos)**
+in Settings, Magpie also runs its built-in tagger on each photo right
+after the scan finishes. You'll see a second green
+**Auto-tagging** progress bar in the status bar at the bottom of
+the window. The suggested tags land in each photo's **Automatic
+tags** section (read-only) so it's obvious a machine picked them.
+This step is off by default.
+
 ## Adding more folders
 
 You can add as many folders as you like — one for your holidays, one

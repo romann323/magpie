@@ -21,7 +21,7 @@
    │  %APPDATA%\com.magpie.app\magpie.db                      │
    │  ├─ library_folders                                      │
    │  ├─ images (folder_id, rel_path, title, ...)             │
-   │  ├─ tags + image_tags                                    │
+   │  ├─ tags + image_tags (image_tags carries a source col) │
    │  ├─ images_fts (FTS5)                                    │
    │  ├─ smart_collections                                    │
    │  ├─ app_settings                                         │

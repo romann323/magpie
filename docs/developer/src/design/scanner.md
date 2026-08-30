@@ -108,9 +108,15 @@ ON CONFLICT(folder_id, rel_path) DO UPDATE SET
     missing     = 0;
 ```
 
-After the row lands, tags are reconciled: everything in `image_tags`
-for this image is deleted, then re-inserted from the fresh tag list.
-Both happen in the same transaction as the image upsert.
+After the row lands, tags are reconciled by `set_image_meta`.
+Auto tags are **additive-only**: each name the file itself reports
+is inserted with `source = 'auto'` **only when the image doesn't
+already carry that name in either source**. Nothing is deleted, so
+auto tags that vanished from the file's metadata since the last scan
+stay in the DB, and user tags typed inside Magpie always survive.
+See [Schema › image_tags](./schema.md#image_tags) for the storage
+model. All of this happens in the same transaction as the image
+upsert.
 
 The FTS5 row is rebuilt via `rebuild_fts_row_tx` at the very end.
 
@@ -141,6 +147,63 @@ scan, the scanner does **not** delete the row automatically — the
 `missing` flag in the `images` table exists to mark it (v1: not
 exposed in UI). A future contribution can add an explicit
 "Clean up missing photos" UI action.
+
+## Stage 7 — Auto-tag pass (opt-in)
+
+When **Settings → Auto-tag photos** is on (`AppSettings.aiAutoTag`),
+`commands::library::add_library_folder` chains an automatic AI
+classification pass onto the tail of a successful scan:
+
+```
+scanner::scan_folder(...)  →  auto_tag::tag_folder(...)
+```
+
+Structurally identical to the scanner:
+
+- One `spawn_blocking` task per image, bounded by a
+  `Semaphore::new(cpus)`.
+- Progress emitted on the `app://auto-tag` event as an
+  [`AutoTagProgress`](./commands.md#events) payload every 5 images
+  (and once on start / finish).
+- A single `tokio::sync::Mutex<()>` on `AppServices.auto_tag_gate`
+  serialises AI passes across folders — if the user drops several
+  folders in quick succession they queue up FIFO instead of
+  competing for CPU. Filesystem scans stay parallel.
+
+Per-image loop (`core::auto_tag::tag_one`):
+
+1. Enumerate candidates via
+   `queries::list_auto_tag_candidates(folder_id)`. Each candidate
+   carries a "fingerprint" — the row's `content_hash` if the
+   handler wrote one, else `mtime_ms.to_string()`.
+2. If `ai_tag_hash == fingerprint`, skip — the image hasn't
+   changed since the last successful pass. Counted as `skipped`
+   in the progress payload.
+3. Ensure the small thumbnail exists (reuse the scanner's
+   `thumbnail::ensure_thumbnails`); if the format isn't decodable
+   by the `image` crate, mark the row as tagged with zero
+   suggestions so we don't try again next run.
+4. Read the thumbnail bytes and call
+   `ImageClassifier::classify(&bytes)` — Phase 1 ships a
+   deterministic `MockClassifier` in
+   `core::auto_tag::classifier.rs`.
+5. Filter suggestions by `classifier.min_confidence()`, sort by
+   descending confidence, cap at `classifier.max_tags_per_image()`.
+6. Attach the surviving names via
+   `queries::add_auto_tags_for_image(image_id, names)`, which
+   writes them as `'auto'`-source tags in a short transaction and
+   rebuilds the FTS row. Names the image already carries (in
+   either source) are a no-op, so the row count stays sane on
+   rerun and any tag the user has typed themselves is left alone.
+   The tags therefore render under the read-only **Automatic
+   tags** section in the details panel, next to XMP-derived tags.
+7. `queries::mark_image_ai_tagged(image_id, fingerprint, now_ms)`
+   stamps `ai_tagged_at` and `ai_tag_hash` on the row.
+
+Auto-tag never runs during plain `rescan_folder` or `rescan_all`
+today — only on the very first scan of a newly-added folder. A
+follow-up can add an explicit "run AI on this folder now" command
+if we need it.
 
 ## Incremental performance
 

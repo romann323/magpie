@@ -3,13 +3,14 @@ pub mod commands;
 pub mod core;
 pub mod db;
 pub mod error;
+pub mod menu;
 pub mod paths;
 pub mod types;
 
 use crate::core::AppServices;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 /// Writer that appends every tracing event to a shared file handle.
 /// Implements `MakeWriter` via a wrapping newtype.
@@ -94,6 +95,17 @@ pub fn run() {
             );
 
             app.manage(services);
+
+            // Build the native menu bar and wire click handlers into
+            // the frontend via an `app://menu` event.
+            let menu = menu::build_menu(app.handle())?;
+            app.set_menu(menu)?;
+            app.on_menu_event(|handle, event| {
+                let id = event.id().0.as_str().to_string();
+                tracing::debug!(id = %id, "menu clicked");
+                let _ = handle.emit(menu::MENU_EVENT, id);
+            });
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -102,11 +114,11 @@ pub fn run() {
             commands::library::list_library_folders,
             commands::library::rescan_folder,
             commands::library::rescan_all,
-            commands::library::check_folder_sync_risk,
             commands::images::query_images,
             commands::images::get_image,
             commands::images::update_image_metadata,
             commands::images::batch_update_metadata,
+            commands::images::rename_image,
             commands::images::delete_images,
             commands::tags::list_tags,
             commands::tags::rename_tag,
@@ -117,6 +129,19 @@ pub fn run() {
             commands::thumbs::get_thumb_path,
             commands::thumbs::get_image_path,
             commands::diag::log_frontend,
+            commands::project::current_project,
+            commands::project::create_project,
+            commands::project::open_project,
+            commands::project::save_project,
+            commands::project::save_project_as,
+            commands::project::close_project,
+            commands::settings::get_app_settings,
+            commands::settings::update_app_settings,
+            commands::magnifier::get_magnifier_context,
+            commands::magnifier::set_magnifier_context,
+            commands::magnifier::set_magnifier_current,
+            menu::set_menu_item_enabled,
+            menu::set_menu_item_label,
         ])
         .run(tauri::generate_context!())
         .expect("error while running application");

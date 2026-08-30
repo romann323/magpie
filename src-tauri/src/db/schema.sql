@@ -32,6 +32,14 @@ CREATE TABLE IF NOT EXISTS images (
     title        TEXT,
     imported_at  INTEGER NOT NULL,
     missing      INTEGER NOT NULL DEFAULT 0,
+    -- Automatic-AI-tagging bookkeeping. `ai_tagged_at` is Unix ms of
+    -- the last successful AI run for this row; NULL when the row has
+    -- never been AI-tagged. `ai_tag_hash` stores a "fingerprint" that
+    -- was current at that time (content_hash when available, otherwise
+    -- mtime_ms as a string); the AI pipeline skips a row on rerun when
+    -- this fingerprint still matches the file's current state.
+    ai_tagged_at INTEGER,
+    ai_tag_hash  TEXT,
     UNIQUE (folder_id, rel_path)
 );
 
@@ -47,13 +55,20 @@ CREATE TABLE IF NOT EXISTS tags (
     name TEXT NOT NULL UNIQUE COLLATE NOCASE
 );
 
--- Many-to-many join.
+-- Many-to-many join. `source` records who put the tag on this image:
+--   'auto' = imported from the file's own metadata (XMP subjects,
+--            Windows Shell keywords, sidecar XMP) at scan time;
+--   'user' = added by the user inside Magpie via the DetailsPanel.
+-- The same (image, tag) pair may exist with both sources; the sidebar
+-- and search treat them as one when aggregating.
 CREATE TABLE IF NOT EXISTS image_tags (
     image_id INTEGER NOT NULL REFERENCES images(id) ON DELETE CASCADE,
     tag_id   INTEGER NOT NULL REFERENCES tags(id)   ON DELETE CASCADE,
-    PRIMARY KEY (image_id, tag_id)
+    source   TEXT    NOT NULL CHECK (source IN ('auto','user')),
+    PRIMARY KEY (image_id, tag_id, source)
 );
-CREATE INDEX IF NOT EXISTS idx_image_tags_tag ON image_tags(tag_id);
+CREATE INDEX IF NOT EXISTS idx_image_tags_tag    ON image_tags(tag_id);
+CREATE INDEX IF NOT EXISTS idx_image_tags_source ON image_tags(image_id, source);
 
 -- FTS5 index over title, filename, and comma-joined tag names.
 CREATE VIRTUAL TABLE IF NOT EXISTS images_fts USING fts5(

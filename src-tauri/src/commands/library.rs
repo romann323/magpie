@@ -1,3 +1,4 @@
+use crate::core::auto_tag;
 use crate::core::scanner;
 use crate::core::AppServices;
 use crate::db::queries;
@@ -13,8 +14,8 @@ fn row_to_ipc(
 ) -> LibraryFolder {
     let image_count = if row.is_available {
         services
-            .db
-            .with_conn(|conn| queries::count_images_in_folder(conn, row.id))
+            .db()
+            .and_then(|db| db.with_conn(|conn| queries::count_images_in_folder(conn, row.id)))
             .unwrap_or(0)
     } else {
         0
@@ -42,9 +43,8 @@ pub async fn add_library_folder(
     // Store the friendly (non-verbatim) form so any downstream Windows
     // Shell API call (used for first-scan tag import) accepts the path.
     let canon = crate::core::formats::common::strip_windows_verbatim_prefix(&canon);
-    let row = services
-        .db
-        .with_conn(|conn| queries::insert_folder(conn, &canon))?;
+    let db = services.db()?;
+    let row = db.with_conn(|conn| queries::insert_folder(conn, &canon))?;
 
     let folder = row_to_ipc(&services, row);
 
@@ -53,8 +53,30 @@ pub async fn add_library_folder(
     let folder_id = folder.id;
     let path_bg = PathBuf::from(&folder.path);
     tauri::async_runtime::spawn(async move {
-        if let Err(e) = scanner::scan_folder(services_bg, app_handle_bg, folder_id, path_bg).await {
-            tracing::error!(error = %e, "scan failed");
+        match scanner::scan_folder(
+            services_bg.clone(),
+            app_handle_bg.clone(),
+            folder_id,
+            path_bg,
+        )
+        .await
+        {
+            Ok(_) => {
+                let ai_on = services_bg
+                    .get_settings()
+                    .map(|s| s.ai_auto_tag)
+                    .unwrap_or(false);
+                if ai_on {
+                    if let Err(e) =
+                        auto_tag::tag_folder(services_bg, app_handle_bg, folder_id).await
+                    {
+                        tracing::error!(error = %e, "auto-tag failed");
+                    }
+                }
+            }
+            Err(e) => {
+                tracing::error!(error = %e, "scan failed");
+            }
         }
     });
 
@@ -67,7 +89,7 @@ pub async fn remove_library_folder(
     id: i64,
 ) -> AppResult<()> {
     services
-        .db
+        .db()?
         .with_conn(|conn| queries::delete_folder(conn, id))
 }
 
@@ -75,17 +97,13 @@ pub async fn remove_library_folder(
 pub async fn list_library_folders(
     services: State<'_, Arc<AppServices>>,
 ) -> AppResult<Vec<LibraryFolder>> {
-    let folders = services.db.with_conn(queries::list_folders)?;
+    let db = services.db()?;
+    let folders = db.with_conn(queries::list_folders)?;
     let mut out: Vec<LibraryFolder> = Vec::with_capacity(folders.len());
-    // Refresh is_available by checking whether the folder root can be
-    // stat-ed. Availability is now purely about the filesystem — the DB
-    // itself is always present.
     for mut row in folders {
         let available = std::path::Path::new(&row.path).is_dir();
         if available != row.is_available {
-            let _ = services
-                .db
-                .with_conn(|conn| queries::set_folder_availability(conn, row.id, available));
+            let _ = db.with_conn(|conn| queries::set_folder_availability(conn, row.id, available));
             row.is_available = available;
         }
         out.push(row_to_ipc(services.inner(), row));
@@ -99,9 +117,8 @@ pub async fn rescan_folder(
     app_handle: AppHandle,
     id: i64,
 ) -> AppResult<ScanResult> {
-    let folder = services
-        .db
-        .with_conn(|conn| queries::get_folder(conn, id))?;
+    let db = services.db()?;
+    let folder = db.with_conn(|conn| queries::get_folder(conn, id))?;
     scanner::scan_folder(
         services.inner().clone(),
         app_handle,
@@ -116,7 +133,8 @@ pub async fn rescan_all(
     services: State<'_, Arc<AppServices>>,
     app_handle: AppHandle,
 ) -> AppResult<Vec<ScanResult>> {
-    let folders = services.db.with_conn(queries::list_folders)?;
+    let db = services.db()?;
+    let folders = db.with_conn(queries::list_folders)?;
     let mut out = Vec::new();
     for f in folders {
         if !f.is_available {

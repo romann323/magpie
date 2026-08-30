@@ -219,6 +219,15 @@ pub struct ImageMetaFromFile {
     pub tags: Vec<String>,
 }
 
+/// Applied by the scanner (and the mtime-based re-read in
+/// `commands::images::get_image`). Never destroys existing tags:
+///
+/// - Title / dimensions / camera fields overwrite as usual.
+/// - Tags read from the file's own metadata (XMP subjects, Windows
+///   Shell keywords, sidecar XMP) are inserted with `source = 'auto'`
+///   **only when the image doesn't already carry that name in
+///   either source**. Auto tags the file no longer mentions stay put;
+///   user tags are never touched here.
 pub fn set_image_meta(
     conn: &mut Connection,
     image_id: i64,
@@ -244,7 +253,7 @@ pub fn set_image_meta(
             image_id,
         ],
     )?;
-    replace_image_tags_tx(&tx, image_id, &m.tags)?;
+    add_auto_tags_if_absent_tx(&tx, image_id, &m.tags)?;
     rebuild_fts_row_tx(&tx, image_id)?;
     tx.commit()?;
     Ok(())
@@ -287,6 +296,11 @@ pub fn mark_missing_by_seen(
 
 /// Full row for the DetailsPanel. `rel_path` is folder-relative; join
 /// with `library_folders.path` to build an absolute path.
+///
+/// Tags are split by provenance: `user_tags` are what the user typed
+/// inside Magpie; `auto_tags` are what the scanner read from the file
+/// itself (XMP / Windows Shell / sidecar). The same name can appear
+/// in both vectors if both sources carry it.
 pub struct ImageRow {
     pub id: i64,
     pub folder_id: i64,
@@ -301,7 +315,8 @@ pub struct ImageRow {
     pub taken_at: Option<i64>,
     pub title: Option<String>,
     pub imported_at: i64,
-    pub tags: Vec<String>,
+    pub user_tags: Vec<String>,
+    pub auto_tags: Vec<String>,
 }
 
 pub fn get_image_row(conn: &Connection, id: i64) -> AppResult<Option<ImageRow>> {
@@ -326,7 +341,8 @@ pub fn get_image_row(conn: &Connection, id: i64) -> AppResult<Option<ImageRow>> 
                     taken_at: row.get(10)?,
                     title: row.get(11)?,
                     imported_at: row.get(12)?,
-                    tags: Vec::new(),
+                    user_tags: Vec::new(),
+                    auto_tags: Vec::new(),
                 })
             },
         )
@@ -334,7 +350,8 @@ pub fn get_image_row(conn: &Connection, id: i64) -> AppResult<Option<ImageRow>> 
     let Some(mut row) = base else {
         return Ok(None);
     };
-    row.tags = tags_for_image(conn, id)?;
+    row.user_tags = user_tags_for_image(conn, id)?;
+    row.auto_tags = auto_tags_for_image(conn, id)?;
     Ok(Some(row))
 }
 
@@ -351,14 +368,103 @@ pub fn get_image_with_root(
     Ok(Some((row, PathBuf::from(&folder.path))))
 }
 
+/// Distinct list of tag names attached to `image_id` from **either**
+/// source. Used to refresh the FTS row and by tests / diagnostics that
+/// want the flat vocabulary a user would see in the sidebar.
 pub fn tags_for_image(conn: &Connection, image_id: i64) -> AppResult<Vec<String>> {
     let mut stmt = conn.prepare(
-        "SELECT t.name FROM tags t
+        "SELECT DISTINCT t.name FROM tags t
          JOIN image_tags it ON it.tag_id = t.id
-         WHERE it.image_id = ?1 ORDER BY t.name COLLATE NOCASE",
+         WHERE it.image_id = ?1
+         ORDER BY t.name COLLATE NOCASE",
     )?;
     let rows = stmt.query_map(params![image_id], |row| row.get::<_, String>(0))?;
     Ok(rows.collect::<Result<Vec<_>, _>>()?)
+}
+
+/// Tags the user typed inside Magpie (`image_tags.source = 'user'`).
+pub fn user_tags_for_image(conn: &Connection, image_id: i64) -> AppResult<Vec<String>> {
+    tags_for_image_by_source(conn, image_id, "user")
+}
+
+/// Tags the scanner read from the file itself (`source = 'auto'`).
+pub fn auto_tags_for_image(conn: &Connection, image_id: i64) -> AppResult<Vec<String>> {
+    tags_for_image_by_source(conn, image_id, "auto")
+}
+
+fn tags_for_image_by_source(
+    conn: &Connection,
+    image_id: i64,
+    source: &str,
+) -> AppResult<Vec<String>> {
+    let mut stmt = conn.prepare(
+        "SELECT t.name FROM tags t
+         JOIN image_tags it ON it.tag_id = t.id
+         WHERE it.image_id = ?1 AND it.source = ?2
+         ORDER BY t.name COLLATE NOCASE",
+    )?;
+    let rows = stmt.query_map(params![image_id, source], |row| row.get::<_, String>(0))?;
+    Ok(rows.collect::<Result<Vec<_>, _>>()?)
+}
+
+/// Rename an image in the DB after the caller has already renamed the
+/// file on disk. Updates `filename`, `rel_path` (same parent), and
+/// `ext`, then rebuilds the FTS row so search finds the new name.
+pub fn rename_image_row(
+    conn: &mut Connection,
+    image_id: i64,
+    new_filename: &str,
+) -> AppResult<()> {
+    let (folder_id, old_rel): (i64, String) = conn.query_row(
+        "SELECT folder_id, rel_path FROM images WHERE id = ?1",
+        params![image_id],
+        |r| Ok((r.get(0)?, r.get(1)?)),
+    )?;
+    let (parent, _) = split_parent(&old_rel);
+    let new_rel = if parent.is_empty() {
+        new_filename.to_string()
+    } else {
+        format!("{parent}/{new_filename}")
+    };
+    let new_ext = std::path::Path::new(new_filename)
+        .extension()
+        .and_then(|s| s.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+
+    let tx = conn.transaction()?;
+    // Guard against colliding with another row already using the target rel_path.
+    let clash: Option<i64> = tx
+        .query_row(
+            "SELECT id FROM images
+             WHERE folder_id = ?1 AND rel_path = ?2 AND id <> ?3",
+            params![folder_id, new_rel, image_id],
+            |r| r.get(0),
+        )
+        .optional()?;
+    if clash.is_some() {
+        return Err(AppError::BadInput(format!(
+            "another image is already registered as \"{new_rel}\""
+        )));
+    }
+    tx.execute(
+        "UPDATE images SET filename = ?1, rel_path = ?2, ext = ?3 WHERE id = ?4",
+        params![new_filename, new_rel, new_ext, image_id],
+    )?;
+    rebuild_fts_row_tx(&tx, image_id)?;
+    tx.commit()?;
+    Ok(())
+}
+
+/// `("sub/dir", "file.jpg")` for `"sub/dir/file.jpg"`; `("", "file.jpg")`
+/// when no parent. Always uses `/` as the separator (matches the on-disk
+/// storage convention).
+fn split_parent(rel: &str) -> (String, String) {
+    let norm = rel.replace('\\', "/");
+    match norm.rsplit_once('/') {
+        Some((p, f)) => (p.to_string(), f.to_string()),
+        None => (String::new(), norm),
+    }
 }
 
 pub fn delete_images(conn: &mut Connection, ids: &[i64]) -> AppResult<usize> {
@@ -401,19 +507,113 @@ pub fn get_paths(
 }
 
 // ---------------------------------------------------------------------
+//                     Automatic AI tagging
+// ---------------------------------------------------------------------
+
+/// One `(image_id, ext, fingerprint, ai_tag_hash)` row per non-missing
+/// image in a folder. `fingerprint` is the value the AI pipeline
+/// compares against `ai_tag_hash` to decide whether to skip.
+#[derive(Debug, Clone)]
+pub struct AutoTagCandidate {
+    pub id: i64,
+    pub rel_path: String,
+    pub ext: String,
+    /// `content_hash` when the scanner has computed one; falls back to
+    /// `mtime_ms.to_string()` so we always have something stable.
+    pub fingerprint: String,
+    pub ai_tag_hash: Option<String>,
+}
+
+/// List every non-missing image in `folder_id`, along with its current
+/// AI-tag fingerprint. Ordered by id so progress reporting is stable.
+pub fn list_auto_tag_candidates(
+    conn: &Connection,
+    folder_id: i64,
+) -> AppResult<Vec<AutoTagCandidate>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, rel_path, ext, content_hash, mtime_ms, ai_tag_hash
+         FROM images
+         WHERE folder_id = ?1 AND missing = 0
+         ORDER BY id",
+    )?;
+    let rows = stmt.query_map(params![folder_id], |row| {
+        let id: i64 = row.get(0)?;
+        let rel_path: String = row.get(1)?;
+        let ext: String = row.get(2)?;
+        let content_hash: Option<String> = row.get(3)?;
+        let mtime_ms: i64 = row.get(4)?;
+        let ai_tag_hash: Option<String> = row.get(5)?;
+        let fingerprint = content_hash.unwrap_or_else(|| mtime_ms.to_string());
+        Ok(AutoTagCandidate {
+            id,
+            rel_path,
+            ext,
+            fingerprint,
+            ai_tag_hash,
+        })
+    })?;
+    Ok(rows.collect::<Result<Vec<_>, _>>()?)
+}
+
+/// Record that AI tagging just ran against `image_id` with the given
+/// fingerprint. `ts_ms` is the current time in ms since epoch.
+pub fn mark_image_ai_tagged(
+    conn: &Connection,
+    image_id: i64,
+    fingerprint: &str,
+    ts_ms: i64,
+) -> AppResult<()> {
+    conn.execute(
+        "UPDATE images SET ai_tagged_at = ?1, ai_tag_hash = ?2 WHERE id = ?3",
+        params![ts_ms, fingerprint, image_id],
+    )?;
+    Ok(())
+}
+
+/// Attach `names` to `image_id` as `'auto'`-source tags. Skips names
+/// the image already carries (from either source) so the row count
+/// stays sane on rerun. Rebuilds the FTS row inside the same
+/// transaction. Called by the automatic-AI-tagging pipeline
+/// ([`crate::core::auto_tag::tag_folder`]) so its output lives in
+/// the same read-only "Automatic tags" bucket as XMP/Shell-imported
+/// tags rather than in the user-editable list.
+pub fn add_auto_tags_for_image(
+    conn: &mut Connection,
+    image_id: i64,
+    names: &[String],
+) -> AppResult<()> {
+    let tx = conn.transaction()?;
+    add_auto_tags_if_absent_tx(&tx, image_id, names)?;
+    rebuild_fts_row_tx(&tx, image_id)?;
+    tx.commit()?;
+    Ok(())
+}
+
+// ---------------------------------------------------------------------
 //                         MetadataPatch
 // ---------------------------------------------------------------------
 
+/// UI-driven patch. Every field is optional; every tag field targets
+/// the `'user'` source (auto tags are read-only from the UI).
 pub struct MetadataPatch {
     /// `None`  = no change.
     /// `Some(None)`     = clear title.
     /// `Some(Some(s))`  = set title.
     pub title: Option<Option<String>>,
+    /// Replace every user tag on the image with this list.
     pub tags: Option<Vec<String>>,
+    /// Attach each name as a user tag (no-op when already present as
+    /// a user tag; an auto row with the same name is unaffected).
     pub tags_add: Option<Vec<String>>,
+    /// Remove each name from the image's user tags. An auto row with
+    /// the same name (if any) stays put.
     pub tags_remove: Option<Vec<String>>,
 }
 
+/// Apply a UI-supplied patch to an image. All tag operations target
+/// the `'user'` source; automatic tags (from the file itself) are
+/// never added or removed here. See [`set_image_meta`] for the scanner
+/// path.
 pub fn apply_metadata_patch(
     conn: &mut Connection,
     image_id: i64,
@@ -427,19 +627,19 @@ pub fn apply_metadata_patch(
         )?;
     }
     if let Some(tags) = &patch.tags {
-        replace_image_tags_tx(&tx, image_id, tags)?;
+        replace_user_tags_tx(&tx, image_id, tags)?;
     }
     if let Some(add) = &patch.tags_add {
         for t in add {
             let name = t.trim();
             if !name.is_empty() {
-                add_tag_tx(&tx, image_id, name)?;
+                add_tag_tx(&tx, image_id, name, "user")?;
             }
         }
     }
     if let Some(rm) = &patch.tags_remove {
         for t in rm {
-            remove_tag_tx(&tx, image_id, t.trim())?;
+            remove_user_tag_tx(&tx, image_id, t.trim())?;
         }
     }
     rebuild_fts_row_tx(&tx, image_id)?;
@@ -459,35 +659,52 @@ fn tag_id_for_name_tx(tx: &rusqlite::Transaction, name: &str) -> AppResult<i64> 
     )?)
 }
 
-fn add_tag_tx(tx: &rusqlite::Transaction, image_id: i64, name: &str) -> AppResult<()> {
+/// Attach `name` to `image_id` with the given source. No-op when the
+/// exact `(image, tag, source)` triple already exists.
+fn add_tag_tx(
+    tx: &rusqlite::Transaction,
+    image_id: i64,
+    name: &str,
+    source: &str,
+) -> AppResult<()> {
     let tag_id = tag_id_for_name_tx(tx, name)?;
     tx.execute(
-        "INSERT OR IGNORE INTO image_tags (image_id, tag_id) VALUES (?1, ?2)",
-        params![image_id, tag_id],
+        "INSERT OR IGNORE INTO image_tags (image_id, tag_id, source)
+         VALUES (?1, ?2, ?3)",
+        params![image_id, tag_id, source],
     )?;
     Ok(())
 }
 
-fn remove_tag_tx(tx: &rusqlite::Transaction, image_id: i64, name: &str) -> AppResult<()> {
+/// Remove `name` from `image_id`'s **user** tags. Auto rows with the
+/// same name are left alone (they came from the file itself).
+fn remove_user_tag_tx(
+    tx: &rusqlite::Transaction,
+    image_id: i64,
+    name: &str,
+) -> AppResult<()> {
     if name.is_empty() {
         return Ok(());
     }
     tx.execute(
         "DELETE FROM image_tags
          WHERE image_id = ?1
-           AND tag_id = (SELECT id FROM tags WHERE name = ?2 COLLATE NOCASE)",
+           AND source   = 'user'
+           AND tag_id   = (SELECT id FROM tags WHERE name = ?2 COLLATE NOCASE)",
         params![image_id, name],
     )?;
     Ok(())
 }
 
-fn replace_image_tags_tx(
+/// Wipe every `'user'` row for `image_id` and re-insert `tags` as
+/// user rows. Auto rows are untouched.
+fn replace_user_tags_tx(
     tx: &rusqlite::Transaction,
     image_id: i64,
     tags: &[String],
 ) -> AppResult<()> {
     tx.execute(
-        "DELETE FROM image_tags WHERE image_id = ?1",
+        "DELETE FROM image_tags WHERE image_id = ?1 AND source = 'user'",
         params![image_id],
     )?;
     for t in tags {
@@ -495,7 +712,41 @@ fn replace_image_tags_tx(
         if name.is_empty() {
             continue;
         }
-        add_tag_tx(tx, image_id, name)?;
+        add_tag_tx(tx, image_id, name, "user")?;
+    }
+    Ok(())
+}
+
+/// Called by [`set_image_meta`] on every scan. For each name the file
+/// currently reports, adds an `'auto'` row **only if** the image
+/// doesn't already carry that name (in either source). Never deletes
+/// anything, so auto tags removed from the file stay in the DB and
+/// user edits are always preserved.
+fn add_auto_tags_if_absent_tx(
+    tx: &rusqlite::Transaction,
+    image_id: i64,
+    tags: &[String],
+) -> AppResult<()> {
+    for t in tags {
+        let name = t.trim();
+        if name.is_empty() {
+            continue;
+        }
+        let already: bool = tx
+            .query_row(
+                "SELECT 1 FROM image_tags it
+                 JOIN tags t ON t.id = it.tag_id
+                 WHERE it.image_id = ?1 AND t.name = ?2 COLLATE NOCASE
+                 LIMIT 1",
+                params![image_id, name],
+                |r| r.get::<_, i64>(0),
+            )
+            .optional()?
+            .is_some();
+        if already {
+            continue;
+        }
+        add_tag_tx(tx, image_id, name, "auto")?;
     }
     Ok(())
 }
@@ -513,9 +764,11 @@ fn rebuild_fts_row_tx(tx: &rusqlite::Transaction, image_id: i64) -> AppResult<()
         )
         .optional()?;
     if let Some((filename, title)) = row {
+        // DISTINCT so an image with the same tag from both sources
+        // doesn't get the token indexed twice.
         let tags: Vec<String> = {
             let mut stmt = tx.prepare(
-                "SELECT t.name FROM tags t
+                "SELECT DISTINCT t.name FROM tags t
                  JOIN image_tags it ON it.tag_id = t.id
                  WHERE it.image_id = ?1",
             )?;
@@ -565,9 +818,12 @@ pub fn rename_tag(conn: &mut Connection, old: &str, new: &str) -> AppResult<()> 
             .optional()?;
         if let (Some(o), Some(n)) = (old_id, new_id) {
             if o != n {
+                // Preserve provenance while merging: each (image, source)
+                // that pointed at `o` should now point at `n`; the new
+                // composite PK deduplicates automatically.
                 tx.execute(
-                    "INSERT OR IGNORE INTO image_tags (image_id, tag_id)
-                     SELECT image_id, ?2 FROM image_tags WHERE tag_id = ?1",
+                    "INSERT OR IGNORE INTO image_tags (image_id, tag_id, source)
+                     SELECT image_id, ?2, source FROM image_tags WHERE tag_id = ?1",
                     params![o, n],
                 )?;
                 tx.execute("DELETE FROM tags WHERE id = ?1", params![o])?;
@@ -627,9 +883,11 @@ pub fn list_all_tags(
         .map(|p| p.trim().to_string())
         .filter(|p| !p.is_empty());
 
+    // COUNT(DISTINCT it.image_id): an image with the same tag as
+    // both 'auto' and 'user' is one image, not two, in the sidebar.
     let (sql, args): (&str, Vec<Value>) = if let Some(p) = &prefix_pat {
         (
-            "SELECT t.name, COUNT(it.image_id) AS c
+            "SELECT t.name, COUNT(DISTINCT it.image_id) AS c
              FROM tags t
              LEFT JOIN image_tags it ON it.tag_id = t.id
              WHERE t.name LIKE ? COLLATE NOCASE
@@ -640,7 +898,7 @@ pub fn list_all_tags(
         )
     } else {
         (
-            "SELECT t.name, COUNT(it.image_id) AS c
+            "SELECT t.name, COUNT(DISTINCT it.image_id) AS c
              FROM tags t
              LEFT JOIN image_tags it ON it.tag_id = t.id
              GROUP BY t.id
