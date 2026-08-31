@@ -77,7 +77,12 @@ export function StatusBar() {
           barClass="bg-accent"
         />
       )}
-      {ai && (
+      {ai && ai.error ? (
+        <div className="flex items-center gap-2 text-amber-400">
+          <span>·</span>
+          <span>Auto-tag skipped — {ai.error}</span>
+        </div>
+      ) : ai ? (
         <ProgressLine
           verb={ai.finished ? 'Auto-tag complete' : 'Auto-tagging'}
           processed={ai.processed}
@@ -94,7 +99,7 @@ export function StatusBar() {
             ) : null
           }
         />
-      )}
+      ) : null}
       {bothRunning && (
         <span className="opacity-60">
           {PRODUCT_NAME} {PRODUCT_VERSION}

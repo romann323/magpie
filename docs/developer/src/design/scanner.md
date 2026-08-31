@@ -184,9 +184,21 @@ Per-image loop (`core::auto_tag::tag_one`):
    by the `image` crate, mark the row as tagged with zero
    suggestions so we don't try again next run.
 4. Read the thumbnail bytes and call
-   `ImageClassifier::classify(&bytes)` — Phase 1 ships a
-   deterministic `MockClassifier` in
-   `core::auto_tag::classifier.rs`.
+   `ImageClassifier::classify(&bytes)`. In production the trait
+   is implemented by `core::auto_tag::clip_classifier::ClipClassifier`,
+   which runs OpenAI **CLIP-ViT-B/32** on the CPU via
+   [`candle`](https://github.com/huggingface/candle) and cosine-ranks
+   the resulting image embedding against a pre-computed matrix of
+   text embeddings for the ~1 000-word bundled photo vocabulary
+   (see [`core/auto_tag/`](./backend.md#coreauto_tag)). Tests use
+   the deterministic `MockClassifier` in
+   `core::auto_tag::classifier.rs` — swap in an `Arc<dyn
+   ImageClassifier>` at the `tag_folder_with` entry point.
+   `tag_folder` refuses to spawn the classifier when the CLIP model
+   files aren't on disk — it emits one "finished with error"
+   progress event instead of running the pass. The
+   `AppServices.auto_tag_gate` also protects the model download
+   against a concurrent auto-tag pass.
 5. Filter suggestions by `classifier.min_confidence()`, sort by
    descending confidence, cap at `classifier.max_tags_per_image()`.
 6. Attach the surviving names via

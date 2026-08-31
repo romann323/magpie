@@ -267,9 +267,63 @@ Optional pipeline chained onto the tail of a successful scan when
   up FIFO instead of thrashing.
 - `classifier.rs` — the small `ImageClassifier` trait
   (`classify(bytes) → Vec<TagSuggestion>` + `min_confidence` +
-  `max_tags_per_image`) and the deterministic `MockClassifier`
-  Phase 1 ships. A real ONNX / CLIP sidecar plugs into the same
-  slot later.
+  `max_tags_per_image`) plus the deterministic `MockClassifier`
+  used exclusively in tests.
+- `clip_classifier.rs` — production `ImageClassifier` backed by
+  OpenAI's **CLIP-ViT-B/32**, driven by
+  [`candle`](https://github.com/huggingface/candle) (pure-Rust ML;
+  no C++ or ONNX Runtime dependency). Per-image work:
+  1. `preprocess_image` — decode with `image::load_from_memory`,
+     resize the short side to 224, centre-crop 224×224, split into
+     3×224×224 NCHW `[0,1]`, then apply CLIP mean/std normalisation.
+  2. `ClipModel::get_image_features` on `Device::Cpu` → 512-dim
+     embedding, L2-normalised.
+  3. Cosine-similarity dot-product against the pre-computed text
+     embedding matrix, keep the top-`MAX_TAGS_PER_IMAGE=6` above
+     `MIN_COSINE=0.20`.
+
+  Vocabulary is compiled in from
+  `core/auto_tag/resources/photo_vocab_v1.txt` (~1000 photo
+  words). Text embeddings for that vocab are computed once via
+  `compute_text_embeddings` (BPE tokenise with the CLIP tokenizer,
+  pad to 77 tokens, run `get_text_features`, L2-normalise) and
+  cached under `<app_data_dir>/models/clip/photo_vocab_v1.embeddings.f32`
+  keyed by `SHA-256(photo_vocab_v1.txt)` — bumping the vocab file
+  invalidates the cache automatically.
+- `model_manager.rs` — downloads and verifies the two required
+  files under `<app_data_dir>/models/clip/`:
+  `model.safetensors` (~605 MB, pinned SHA-256) and `tokenizer.json`
+  (~2 MB, trusted). Streams bytes with `reqwest` + `futures-util`
+  to a `.part` file, verifies the hash, then atomically renames.
+  Publishes `app://ai-model-download` progress events (payload
+  [`AiModelDownloadProgress`](./commands.md#events)) throttled to
+  200 ms so the dialog can draw a smooth progress bar.
+
+  A few details worth knowing when debugging network failures:
+
+  - `reqwest` is built with the `rustls-tls-native-roots` feature so
+    TLS uses the **Windows trust store** (SChannel roots via
+    `rustls-native-certs`). This is required when the user sits
+    behind a corporate MITM proxy whose CA is not in the bundled
+    Mozilla `webpki-roots` set.
+  - Downloads are **resumable**. Bytes are hashed as they land in
+    the `.part` file, and if a request fails mid-stream the next
+    attempt sends `Range: bytes=N-` from wherever the hash counter
+    stopped, so a mid-transfer drop costs one round-trip rather
+    than 600 MB.
+  - Each file is retried up to `MAX_DOWNLOAD_ATTEMPTS = 4` times
+    with 2s / 4s / 8s exponential backoff. On a hard failure the
+    error message contains the full `reqwest → hyper → rustls`
+    source chain (`chain()` helper walks `.source()` recursively),
+    which is what the Settings dialog surfaces to the user.
+  - Per-request timeouts: 30 s to connect, 30 min for the whole
+    body, plus TCP keep-alive every 30 s so stateful firewalls
+    don't silently drop the connection during long downloads.
+- `tag_folder` refuses to spawn the classifier when
+  `model_manager::check_status` reports the safetensors or
+  tokenizer files missing — it emits a single "finished with
+  error" `AutoTagProgress` so the status bar shows a warning, and
+  the Settings dialog is the only path that starts a download.
 
 Per-image bookkeeping lives on the `images` row itself:
 `ai_tagged_at` (Unix ms of the last successful pass) and

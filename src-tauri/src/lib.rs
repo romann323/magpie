@@ -140,6 +140,9 @@ pub fn run() {
             commands::magnifier::get_magnifier_context,
             commands::magnifier::set_magnifier_context,
             commands::magnifier::set_magnifier_current,
+            commands::ai::check_ai_model_status,
+            commands::ai::download_ai_model,
+            commands::ai::clear_ai_model,
             menu::set_menu_item_enabled,
             menu::set_menu_item_label,
         ])

@@ -22,8 +22,6 @@ import {
   renameImage,
   saveProjectAs,
   setMenuItemEnabled,
-  setMenuItemLabel,
-  updateAppSettings,
   updateImageMetadata,
 } from './ipc'
 import { filterFromView, useStore, type UndoEntry } from './store'
@@ -38,7 +36,7 @@ export default function App() {
   const settings = useStore((s) => s.settings)
   const qc = useQueryClient()
   const [settingsDialog, setSettingsDialog] = useState<
-    'theme' | 'font-size' | 'language' | null
+    'theme' | 'font-size' | 'language' | 'ai-auto-tag' | null
   >(null)
 
   // -------- Bootstrap: fetch current project + settings on startup ------
@@ -57,15 +55,6 @@ export default function App() {
   useEffect(() => {
     if (settingsQ.data) setSettings(settingsQ.data)
   }, [settingsQ.data, setSettings])
-
-  // Sync the Settings → Auto-tag photos menu label with the persisted
-  // setting whenever it changes. Using a dynamic label (with / without
-  // a trailing ✓) is simpler and cross-platform-safer than trying to
-  // rebuild the menu with a native checkmark widget.
-  useEffect(() => {
-    const label = settings?.aiAutoTag ? 'Auto-tag photos  ✓' : 'Auto-tag photos'
-    void setMenuItemLabel('set_ai_auto_tag', label).catch(() => {})
-  }, [settings?.aiAutoTag])
 
   // -------- Apply theme + font-size to <html> ---------------------------
   useEffect(() => {
@@ -91,7 +80,7 @@ export default function App() {
     onSetLanguage: () => setSettingsDialog('language'),
     onSetTheme: () => setSettingsDialog('theme'),
     onSetFontSize: () => setSettingsDialog('font-size'),
-    onToggleAiAutoTag: () => void handleToggleAiAutoTag(qc, setSettings),
+    onOpenAiAutoTag: () => setSettingsDialog('ai-auto-tag'),
   })
 
   // -------- Toggle Edit → Undo/Redo enabled state -----------------------
@@ -237,7 +226,7 @@ type MenuHandlers = {
   onSetLanguage: () => void
   onSetTheme: () => void
   onSetFontSize: () => void
-  onToggleAiAutoTag: () => void
+  onOpenAiAutoTag: () => void
 }
 
 function useMenuRouter(h: MenuHandlers) {
@@ -270,7 +259,7 @@ function useMenuRouter(h: MenuHandlers) {
         case 'set_font_size':
           return h.onSetFontSize()
         case 'set_ai_auto_tag':
-          return h.onToggleAiAutoTag()
+          return h.onOpenAiAutoTag()
       }
     })
       .then((fn) => {
@@ -369,21 +358,6 @@ function invalidateProjectQueries(qc: ReturnType<typeof useQueryClient>) {
   qc.invalidateQueries({ queryKey: ['folders'] })
   qc.invalidateQueries({ queryKey: ['images'] })
   qc.invalidateQueries({ queryKey: ['tags'] })
-}
-
-async function handleToggleAiAutoTag(
-  qc: ReturnType<typeof useQueryClient>,
-  setSettings: (s: AppSettings) => void,
-) {
-  const cur = useStore.getState().settings
-  const next = !cur?.aiAutoTag
-  try {
-    const updated = await updateAppSettings({ aiAutoTag: next })
-    setSettings(updated)
-    qc.invalidateQueries({ queryKey: ['app-settings'] })
-  } catch (e) {
-    alert(`Could not update setting: ${(e as Error).message}`)
-  }
 }
 
 function handleOpenMagnifierFromMenu() {

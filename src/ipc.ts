@@ -2,6 +2,8 @@ import { invoke } from '@tauri-apps/api/core'
 import { convertFileSrc } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
 import type {
+  AiModelDownloadProgress,
+  AiModelStatus,
   AppSettings,
   AppSettingsPatch,
   AutoTagProgress,
@@ -153,6 +155,20 @@ export const onAutoTagProgress = (
   handler: (p: AutoTagProgress) => void,
 ): Promise<UnlistenFn> =>
   listen<AutoTagProgress>('app://auto-tag', (e) => handler(e.payload))
+
+// ---------- AI model management ----------
+
+export const checkAiModelStatus = () =>
+  invoke<AiModelStatus>('check_ai_model_status')
+
+export const downloadAiModel = () => invoke<void>('download_ai_model')
+
+export const clearAiModel = () => invoke<void>('clear_ai_model')
+
+export const onAiModelDownloadProgress = (
+  handler: (p: AiModelDownloadProgress) => void,
+): Promise<UnlistenFn> =>
+  listen<AiModelDownloadProgress>('app://ai-model-download', (e) => handler(e.payload))
 
 export const onImageUpdated = (
   handler: (id: number) => void,

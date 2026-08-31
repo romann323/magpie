@@ -12,14 +12,17 @@ and a rough entry point for the future contributor picking it up.
 
 ## Face and object recognition
 
-- **Automatic tagging is now shipping as an opt-in, local-only
-  stub** — see [Scanner → Auto-tag pass](../design/scanner.md) and
-  `core::auto_tag`. Toggle **Settings → Auto-tag photos** to enable
-  it; the pipeline runs after every folder-add scan and writes the
-  suggestions as user tags via `apply_metadata_patch`. Phase 1 ships
-  a deterministic `MockClassifier` (no ML model bundled). A real
-  ONNX / CLIP sidecar can plug into the same `ImageClassifier`
-  trait later without touching the caller.
+- **Automatic object tagging now ships in scope** — an opt-in,
+  fully-local pipeline backed by OpenAI **CLIP-ViT-B/32** running
+  on the CPU via [`candle`](https://github.com/huggingface/candle).
+  See [Scanner → Auto-tag pass](../design/scanner.md) and
+  `core::auto_tag` (`clip_classifier` / `model_manager`). The
+  `ImageClassifier` trait is what to implement if you want to swap
+  in a different backbone (larger CLIP, RAM++, an open-vocab
+  detector), and the model files themselves live under
+  `<app_data_dir>/models/clip/` — pin new SHA-256 values in
+  `model_manager::REQUIRED_FILES` and bump `VOCAB_VERSION` when
+  the vocabulary changes.
 - Face recognition specifically is still out of scope — the trait
   doesn't currently expose bounding boxes and the DB has no notion
   of a "person" separate from a tag.

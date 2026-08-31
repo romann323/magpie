@@ -23,13 +23,16 @@
 //!   alongside the scan progress line.
 
 pub mod classifier;
+pub mod clip_classifier;
+pub mod model_manager;
 
 use crate::core::thumbnail;
 use crate::core::AppServices;
 use crate::db::queries::{self, AutoTagCandidate};
 use crate::error::{AppError, AppResult};
 use crate::types::{AutoTagProgress, AutoTagResult};
-use classifier::{ImageClassifier, MockClassifier};
+use classifier::ImageClassifier;
+use clip_classifier::ClipClassifier;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::Arc;
@@ -38,15 +41,77 @@ use tauri::{AppHandle, Emitter};
 pub const AUTO_TAG_EVENT: &str = "app://auto-tag";
 
 /// Default entry point invoked from `commands::library::add_library_folder`
-/// after the scanner finishes. Uses the stub [`MockClassifier`] — a
-/// real ONNX/CLIP model can be swapped in later without touching this
-/// signature.
+/// after the scanner finishes.
+///
+/// Looks for a downloaded CLIP model under `<app_data_dir>/models/clip/`.
+/// When present, uses [`ClipClassifier`] (zero-shot ranking against
+/// our curated vocabulary). When absent, emits a single "finished
+/// with error" progress event and returns immediately — the UI's
+/// Auto-tag toggle is responsible for prompting the download; we
+/// don't silently downgrade to the mock any more.
 pub async fn tag_folder(
     services: Arc<AppServices>,
     app_handle: AppHandle,
     folder_id: i64,
 ) -> AppResult<AutoTagResult> {
-    let classifier: Arc<dyn ImageClassifier> = Arc::new(MockClassifier::new());
+    let status = model_manager::check_status(&services.app_data_dir)?;
+    if !status.model_present || !status.tokenizer_present {
+        tracing::warn!(
+            model = status.model_present,
+            tokenizer = status.tokenizer_present,
+            "auto-tag skipped: model files not fully downloaded"
+        );
+        let _ = emit_progress(
+            &app_handle,
+            &AutoTagProgress {
+                folder_id,
+                processed: 0,
+                total: 0,
+                current_path: None,
+                tags_added: 0,
+                skipped: 0,
+                finished: true,
+                error: Some(
+                    "AI model not downloaded — open Settings → Auto-tag photos to install it."
+                        .into(),
+                ),
+            },
+        );
+        return Ok(AutoTagResult {
+            folder_id,
+            ..Default::default()
+        });
+    }
+
+    // Building the CLIP classifier can be slow (loads ~90 MB of
+    // weights, builds the DirectML session, and — on very first
+    // launch — runs the text encoder over the vocab). Do it on a
+    // blocking task so the async runtime keeps spinning.
+    let app_data_dir = services.app_data_dir.clone();
+    let build_result = tokio::task::spawn_blocking(move || ClipClassifier::try_load(&app_data_dir))
+        .await
+        .map_err(|e| AppError::Internal(format!("classifier build join: {e}")))?;
+    let classifier: Arc<dyn ImageClassifier> = match build_result {
+        Ok(c) => Arc::new(c),
+        Err(e) => {
+            tracing::error!(error = %e, "failed to initialise CLIP classifier");
+            let _ = emit_progress(
+                &app_handle,
+                &AutoTagProgress {
+                    folder_id,
+                    processed: 0,
+                    total: 0,
+                    current_path: None,
+                    tags_added: 0,
+                    skipped: 0,
+                    finished: true,
+                    error: Some(format!("AI classifier failed to start: {e}")),
+                },
+            );
+            return Err(e);
+        }
+    };
+
     tag_folder_with(services, app_handle, folder_id, classifier).await
 }
 
@@ -89,6 +154,7 @@ pub async fn tag_folder_with(
             tags_added: 0,
             skipped: 0,
             finished: false,
+            error: None,
         },
     );
 
@@ -156,6 +222,7 @@ pub async fn tag_folder_with(
                         tags_added: tags_added.load(Ordering::Relaxed),
                         skipped: skipped.load(Ordering::Relaxed),
                         finished: false,
+                        error: None,
                     },
                 );
             }
@@ -187,6 +254,7 @@ pub async fn tag_folder_with(
             tags_added: result.tags_added,
             skipped: result.skipped,
             finished: true,
+            error: None,
         },
     );
 

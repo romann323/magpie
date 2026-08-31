@@ -470,13 +470,14 @@ not a project is open.
 
 ## Events (Rust → JS)
 
-| Event                | Payload                | Emitted by                              |
-| -------------------- | ---------------------- | --------------------------------------- |
-| `app://scan`         | `ScanProgress`         | `scanner::scan_folder` during scans.    |
-| `app://auto-tag`     | `AutoTagProgress`      | `core::auto_tag::tag_folder` during an automatic-AI-tagging pass. |
-| `app://image-updated`| `i64` (image id)       | Any command that mutates a row.         |
-| `app://images-deleted`| `Vec<i64>`            | `delete_images` after a successful batch. |
-| `app://menu`         | `String` (menu id)     | Every native menu click; routed by `App.tsx`. |
+| Event                     | Payload                    | Emitted by                              |
+| ------------------------- | -------------------------- | --------------------------------------- |
+| `app://scan`              | `ScanProgress`             | `scanner::scan_folder` during scans.    |
+| `app://auto-tag`          | `AutoTagProgress`          | `core::auto_tag::tag_folder` during an automatic-AI-tagging pass. |
+| `app://ai-model-download` | `AiModelDownloadProgress`  | `core::auto_tag::model_manager::ensure_downloaded` while the CLIP model streams from HuggingFace. |
+| `app://image-updated`     | `i64` (image id)           | Any command that mutates a row.         |
+| `app://images-deleted`    | `Vec<i64>`                 | `delete_images` after a successful batch. |
+| `app://menu`              | `String` (menu id)         | Every native menu click; routed by `App.tsx`. |
 
 **`AutoTagProgress` payload:**
 
@@ -489,18 +490,63 @@ type AutoTagProgress = {
   tagsAdded: number   // cumulative tags attached this run
   skipped: number     // images skipped because fingerprint still matches
   finished: boolean
+  // Populated only on `finished: true` when the pass could not run
+  // (usually because the CLIP model has not been downloaded yet).
+  error?: string | null
 }
 ```
 
 On `finished: true` the frontend invalidates the `images`, `tags`,
 and `image` query keys so the sidebar tag cloud and any open details
-panel pick up the newly-attached tags.
+panel pick up the newly-attached tags. When `error` is non-null the
+status bar surfaces it as a small warning ("*AI model not
+downloaded*") but otherwise treats the pass as a no-op.
+
+**`AiModelDownloadProgress` payload:**
+
+```typescript
+type AiModelDownloadProgress = {
+  currentFile: string       // e.g. "model.safetensors"
+  currentBytes: number      // bytes fetched for currentFile so far
+  currentTotal: number      // Content-Length for currentFile
+  totalBytes: number        // cumulative bytes across all files
+  totalExpected: number     // AI_MODEL_TOTAL_BYTES (~607 MB)
+  finished: boolean
+  error?: string | null
+}
+```
+
+Ticks are throttled to ~200 ms so the download dialog can draw a
+smooth progress bar. On `finished: true` the frontend re-runs
+`check_ai_model_status` — as soon as `status.ready` flips true the
+**Auto-tag photos** dialog enables its toggle.
+
+### AI-model management commands
+
+Backed by `core::auto_tag::model_manager` — see
+[Backend → `core/auto_tag/`](./backend.md#coreauto_tag).
+
+- `check_ai_model_status() -> AiModelStatus` — cheap `stat`-only
+  probe of `<app_data_dir>/models/clip/`. Reports whether the
+  safetensors weights, tokenizer JSON, and pre-computed vocab
+  embedding cache are on disk, plus the total expected download
+  size.
+- `download_ai_model()` — idempotently streams every missing file
+  from HuggingFace under an `AppServices.auto_tag_gate` lock (so
+  a folder-add auto-tag pass and a manual download can't compete
+  for the same partial file). Verifies each file's SHA-256 before
+  promoting the `.part` file to its final name. Emits
+  `app://ai-model-download` while it runs.
+- `clear_ai_model()` — removes every file under `models/clip/`,
+  including the embedding cache. Used by the Settings dialog's
+  **Remove model files** button.
 
 ### Menu commands
 
 - `set_menu_item_enabled(id, enabled)` — used for context-sensitive
   items (`edit_undo`, `edit_redo`, `view_magnifier`).
-- `set_menu_item_label(id, label)` — used to reflect stateful
-  toggles that don't have a native check widget. Currently the only
-  caller is `App.tsx` syncing the **Settings → Auto-tag photos**
-  label (`… ✓` vs plain) to the persisted `aiAutoTag` setting.
+- `set_menu_item_label(id, label)` — legacy hook that used to
+  suffix a `✓` on the **Settings → Auto-tag photos** entry. The
+  entry is now a static "…" menu item that opens the Auto-tag
+  dialog; the check-state lives entirely inside the dialog, so
+  `App.tsx` no longer calls this command for that item.

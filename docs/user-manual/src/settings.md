@@ -25,18 +25,34 @@ add more languages.
 
 ## Auto-tag photos
 
-When this is on, Magpie automatically suggests a couple of tags for
-every photo in a folder as soon as you add that folder to a project.
-The suggestions land in the photo's **Automatic tags** list — the
-same read-only section where tags read from the file itself live —
-so they are clearly marked as machine-picked and can't be removed one
-at a time from Magpie. To sweep an unwanted AI tag off every photo
-at once, right-click it in the sidebar and pick **Delete tag**.
+When this is on, Magpie looks at every photo in a folder as soon as
+you add that folder to a project and picks a few tags that describe
+what's in the picture (like *beach*, *dog*, *sunset*, *portrait*).
+The tags land in the photo's **Automatic tags** list — the same
+read-only section where tags read from the file itself live — so
+they're clearly marked as machine-picked. To sweep an unwanted
+auto tag off every photo at once, right-click it in the sidebar
+and pick **Delete tag**.
 
-- **Off by default.** Nothing runs unless you turn it on.
-- Toggle it from **Settings → Auto-tag photos** on the menu bar.
-  A checkmark (✓) at the end of the label means it's on.
-- The work happens on your PC — no photo ever leaves your machine.
+### Turning it on
+
+Open **Settings → Auto-tag photos...** on the menu bar. The dialog
+walks you through two steps:
+
+1. **Download the AI model.** The first time you use auto-tagging,
+   Magpie needs to download the picture-recognition model
+   (~580 MB). Click **Download AI model** and wait for the green
+   progress bar to fill. This is a one-time download — Magpie
+   remembers the model between sessions.
+2. **Turn on the toggle.** Once the model is ready, tick
+   *Automatically tag photos when adding a new folder*. The toggle
+   stays greyed out until step 1 finishes.
+
+### What happens after
+
+- Everything runs on your PC — no photo, no thumbnail, and no tag
+  ever leaves your machine. An internet connection is only needed
+  once, to download the model.
 - You'll see a green **Auto-tagging** progress bar in the status
   bar at the bottom of the window while it runs, next to the usual
   Scanning bar. Magpie stays fully responsive while it works.
@@ -46,19 +62,34 @@ at once, right-click it in the sidebar and pick **Delete tag**.
   photos that haven't changed since Magpie last tagged them.
 - Only the initial add of a folder triggers auto-tagging. A plain
   rescan doesn't.
+- If you added a folder before you finished downloading the model,
+  the status bar shows a small warning ("*AI model not downloaded*").
+  Open **Settings → Auto-tag photos...** to finish the download,
+  then use **Rescan** on the folder — or just add a new folder —
+  to try again.
 
-The first version ships with a simple built-in tagger that picks
-from a fixed short list of everyday tags (landscape, portrait,
-indoor, outdoor, day, night, nature, city, water, food, people,
-animal). It's a starting point — a smarter model can slot in later
-without changing anything you see.
+### About the AI model
 
-If you decide auto-tag isn't for you, toggle it off. Tags that were
-already added stay put in **Automatic tags** on the affected photos.
-Because that section is read-only, you can't clean them up
-photo-by-photo from the details panel — instead right-click the
-name in the sidebar's tag cloud and pick **Delete tag** to remove
-it from every file at once.
+Magpie uses **CLIP** — an open-source model from OpenAI that
+learned to match photos with plain-English descriptions. It picks
+tags from a built-in list of about a thousand common photo words
+(scenes, objects, animals, activities, lighting, colours…) and
+keeps only the ones it's confident about.
+
+The model isn't perfect: it can miss things, and once in a while
+it'll pick a wrong tag. That's fine — the tags are just a
+starting point. You can always add your own in the **Tags** box
+of the details panel, and use the sidebar's **Delete tag** menu
+to clean up any auto tag you don't like across your whole library.
+
+### Removing the model
+
+If you decide you don't want auto-tagging any more, open
+**Settings → Auto-tag photos...** and click **Remove model
+files**. This frees up ~580 MB on your PC and also turns the
+auto-tag toggle off. Existing auto tags on your photos stay in
+place — remove them from the sidebar's tag cloud if you want a
+clean slate.
 
 ## Where these live
 

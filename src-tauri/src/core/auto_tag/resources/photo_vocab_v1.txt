@@ -1,0 +1,652 @@
+# Magpie photo vocabulary v1
+# One tag per line. Lines starting with '#' are comments.
+# Blank lines are ignored. Case-insensitive, deduplicated on load.
+# When the CLIP text encoder is invoked each entry is wrapped in the
+# prompt template "a photo of a <tag>" — so short common nouns work
+# best. Multi-word entries are allowed ("black and white photo").
+
+# ---------- Scene types (outdoor) ----------
+beach
+forest
+mountain
+desert
+lake
+river
+ocean
+waterfall
+meadow
+field
+countryside
+farm
+garden
+park
+street
+alley
+bridge
+harbor
+pier
+skyline
+cityscape
+skyscraper
+downtown
+suburb
+village
+courtyard
+plaza
+square
+market
+playground
+stadium
+airport
+railway station
+train platform
+parking lot
+gas station
+construction site
+
+# ---------- Scene types (indoor) ----------
+kitchen
+living room
+bedroom
+bathroom
+dining room
+office
+classroom
+library
+gymnasium
+church
+temple
+mosque
+museum
+gallery
+theater
+cinema
+concert hall
+restaurant
+cafe
+bar
+hotel lobby
+hospital
+laboratory
+warehouse
+factory
+store
+shop
+supermarket
+mall
+staircase
+hallway
+basement
+attic
+balcony
+rooftop
+garage
+workshop
+studio
+greenhouse
+
+# ---------- Weather & time of day ----------
+sunny
+cloudy
+overcast
+rainy
+foggy
+misty
+stormy
+snowy
+windy
+clear sky
+sunrise
+sunset
+dawn
+dusk
+golden hour
+blue hour
+daytime
+nighttime
+moonlight
+starry night
+lightning
+rainbow
+frost
+
+# ---------- Seasons ----------
+spring
+summer
+autumn
+winter
+
+# ---------- Nature & flora ----------
+tree
+oak
+pine
+palm tree
+maple
+willow
+bamboo
+cactus
+bush
+shrub
+grass
+lawn
+moss
+fern
+flower
+rose
+tulip
+sunflower
+lily
+daisy
+orchid
+lavender
+poppy
+mushroom
+leaf
+fallen leaves
+pinecone
+berries
+fruit tree
+
+# ---------- Landscape features ----------
+sand
+snow
+ice
+glacier
+rocks
+cliff
+valley
+canyon
+hill
+cave
+volcano
+dune
+coast
+shore
+tide pool
+stream
+
+# ---------- Animals (mammals) ----------
+dog
+puppy
+cat
+kitten
+horse
+donkey
+cow
+sheep
+goat
+pig
+rabbit
+hamster
+mouse
+squirrel
+fox
+wolf
+bear
+deer
+elephant
+lion
+tiger
+leopard
+zebra
+giraffe
+monkey
+gorilla
+kangaroo
+panda
+raccoon
+
+# ---------- Animals (birds/aquatic/other) ----------
+bird
+eagle
+owl
+parrot
+seagull
+swan
+duck
+goose
+chicken
+rooster
+penguin
+flamingo
+peacock
+fish
+goldfish
+shark
+whale
+dolphin
+turtle
+frog
+snake
+lizard
+crocodile
+butterfly
+bee
+dragonfly
+spider
+crab
+octopus
+
+# ---------- People (individuals) ----------
+person
+portrait
+selfie
+baby
+toddler
+child
+teenager
+young adult
+adult
+elderly person
+man
+woman
+group of people
+couple
+family
+crowd
+audience
+
+# ---------- People (professions/roles) ----------
+chef
+doctor
+nurse
+firefighter
+police officer
+soldier
+farmer
+fisherman
+worker
+student
+teacher
+musician
+dancer
+athlete
+runner
+cyclist
+swimmer
+photographer
+painter
+artist
+sculptor
+bride
+groom
+priest
+
+# ---------- Human activities ----------
+walking
+running
+jogging
+hiking
+cycling
+skiing
+snowboarding
+skateboarding
+surfing
+swimming
+diving
+climbing
+dancing
+singing
+playing guitar
+playing piano
+playing violin
+playing drums
+reading
+writing
+drawing
+painting
+cooking
+baking
+eating
+drinking
+sleeping
+sitting
+standing
+jumping
+laughing
+smiling
+crying
+hugging
+kissing
+praying
+meditating
+yoga
+working out
+lifting weights
+fishing
+sailing
+rowing
+kayaking
+
+# ---------- Sports ----------
+football
+soccer
+basketball
+baseball
+tennis
+golf
+volleyball
+cricket
+rugby
+hockey
+skiing race
+marathon
+gymnastics
+boxing
+martial arts
+
+# ---------- Objects (furniture & interior) ----------
+chair
+armchair
+sofa
+bed
+table
+desk
+bookshelf
+wardrobe
+mirror
+lamp
+chandelier
+candle
+fireplace
+carpet
+rug
+curtain
+pillow
+blanket
+clock
+picture frame
+plant pot
+vase
+sculpture
+painting on the wall
+
+# ---------- Objects (kitchen & food) ----------
+cup
+mug
+glass
+bottle
+plate
+bowl
+fork
+knife
+spoon
+chopsticks
+teapot
+kettle
+frying pan
+pot
+oven
+stove
+refrigerator
+microwave
+toaster
+blender
+coffee machine
+cutting board
+apron
+bread
+sandwich
+burger
+pizza
+pasta
+noodles
+rice
+soup
+salad
+steak
+chicken meal
+fish dish
+sushi
+cheese
+egg
+omelette
+pancake
+waffle
+cake
+cupcake
+cookie
+donut
+chocolate
+ice cream
+candy
+fruit
+apple
+banana
+orange
+lemon
+strawberry
+grapes
+watermelon
+pineapple
+mango
+tomato
+potato
+carrot
+onion
+lettuce
+mushrooms
+corn
+coffee
+tea
+juice
+smoothie
+beer
+wine
+cocktail
+
+# ---------- Objects (tech & office) ----------
+computer
+laptop
+keyboard
+computer mouse
+monitor
+smartphone
+tablet
+camera
+lens
+tripod
+microphone
+speaker
+headphones
+television
+remote control
+game controller
+router
+printer
+scanner
+pen
+pencil
+notebook
+book
+newspaper
+magazine
+map
+calendar
+whiteboard
+scissors
+stapler
+tape
+
+# ---------- Objects (clothing & accessories) ----------
+shirt
+t-shirt
+dress
+skirt
+suit
+tie
+jacket
+coat
+sweater
+jeans
+pants
+shorts
+hat
+cap
+helmet
+scarf
+gloves
+sunglasses
+eyeglasses
+watch
+ring
+necklace
+earrings
+bracelet
+handbag
+backpack
+suitcase
+umbrella
+sneakers
+boots
+sandals
+shoes
+
+# ---------- Vehicles ----------
+bicycle
+motorcycle
+scooter
+car
+sports car
+convertible
+suv
+pickup truck
+truck
+bus
+van
+taxi
+police car
+ambulance
+fire truck
+tractor
+train
+subway
+tram
+airplane
+helicopter
+hot air balloon
+boat
+sailboat
+yacht
+ship
+canoe
+kayak
+jet ski
+
+# ---------- Buildings & structures ----------
+house
+apartment building
+skyscraper
+cottage
+cabin
+castle
+palace
+lighthouse
+windmill
+tower
+statue
+monument
+fountain
+gate
+fence
+wall
+staircase outside
+door
+window
+roof
+chimney
+
+# ---------- Events & occasions ----------
+wedding
+birthday party
+graduation
+concert
+festival
+parade
+protest
+meeting
+conference
+funeral
+holiday
+Christmas tree
+Halloween
+fireworks
+picnic
+barbecue
+camping
+
+# ---------- Photo styles / composition ----------
+portrait photo
+landscape photo
+close-up
+macro photo
+panorama
+aerial photo
+drone photo
+long exposure
+silhouette
+reflection
+shadow
+bokeh
+motion blur
+black and white photo
+sepia
+high contrast
+low light
+backlit
+symmetry
+minimalist
+
+# ---------- Colors & aesthetics ----------
+red
+orange
+yellow
+green
+blue
+purple
+pink
+brown
+black
+white
+gray
+gold
+silver
+neon
+colorful
+monochrome
+pastel
+
+# ---------- Moods & abstracts ----------
+happy scene
+sad scene
+peaceful scene
+dramatic scene
+mysterious scene
+romantic scene
+busy scene
+empty scene
+cozy indoor
+industrial
+rustic
+modern
+vintage
+retro
+futuristic
+abstract
+
+# ---------- Documents / captures ----------
+screenshot
+document
+receipt
+whiteboard notes
+handwritten note
+diagram
+chart
+QR code
+barcode
+license plate
+sign
+poster
+billboard
+graffiti
+logo

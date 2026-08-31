@@ -86,26 +86,43 @@ cargo test --test auto_tag
 
 ### Testing the auto-tag pipeline end-to-end
 
-The mock classifier lets you exercise the full
-`add_library_folder` → scan → auto-tag → `app://auto-tag` chain
-without any ML dependencies:
+`auto_tag.rs` integration tests use the deterministic
+`MockClassifier` so they don't need any ML dependencies. The
+production classifier is `ClipClassifier`
+(`core::auto_tag::clip_classifier`), which is exercised manually:
 
 1. Launch Magpie and open (or create) a project.
-2. **Settings → Auto-tag photos** — verify the label gains a
-   trailing ✓.
-3. Add a folder with a handful of JPEGs. The status bar shows the
+2. **Settings → Auto-tag photos...** — the dialog opens.
+   The **AI model** section reports *Not downloaded* on a fresh
+   install. Click **Download AI model** and wait for the green
+   progress bar to fill (~600 MB, one-time). Progress ticks come
+   via `app://ai-model-download`.
+3. Once the banner flips to *Model ready*, tick *Automatically
+   tag photos when adding a new folder* and close the dialog.
+4. Add a folder with a handful of JPEGs. The status bar shows the
    scan line first, then the auto-tag line (green bar).
-4. Open one of the newly-scanned images. Two tags from the
-   `MockClassifier` vocabulary (`landscape`, `portrait`, `indoor`,
-   `outdoor`, `day`, `night`, `nature`, `city`, `water`, `food`,
-   `people`, `animal`) appear in **Automatic tags** (read-only,
-   with the lock affordance), not in **Your tags**.
-5. Re-add the same folder (after `remove_library_folder`) — the
+5. Open one of the newly-scanned images. A handful of tags
+   picked from `photo_vocab_v1.txt` (e.g. *beach*, *dog*,
+   *portrait*) appear in **Automatic tags** (read-only, with the
+   lock affordance), not in **Your tags**.
+6. Re-add the same folder (after `remove_library_folder`) — the
    second run's status bar reports zero new tags because every row
    still matches its `ai_tag_hash` fingerprint.
-6. Turn **Settings → Auto-tag photos** off and add another folder:
-   the scan runs but no `app://auto-tag` event fires and the DB's
+7. Turn the toggle off in the dialog and add another folder: the
+   scan runs but no `app://auto-tag` event fires and the DB's
    `ai_tagged_at` column stays NULL.
+
+To force a re-download in a manual test, click **Remove model
+files** in the Auto-tag dialog — this deletes every file under
+`<app_data_dir>/models/clip/` (weights + tokenizer + cached
+vocab embeddings) and turns the toggle off.
+
+If you add a folder before the model has finished downloading,
+`tag_folder` emits a single `AutoTagProgress { finished: true,
+error: Some("AI model not downloaded — …"), .. }`. The status bar
+renders that as a small amber warning and the DB row's
+`ai_tagged_at` stays NULL, so the next re-add or rescan can
+retry once the download completes.
 
 ## L4 — screenshot smoke tests
 

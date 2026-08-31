@@ -51,6 +51,31 @@ quick-xml = { version = "0.36", features = [] }
 
 trash = "5"
 
+# --- Automatic-AI-tagging pipeline (CLIP zero-shot tagger).
+# `candle-*` are HuggingFace's pure-Rust ML stack — no C++ deps, no
+# third-party CDN like ONNX Runtime's pyke.io (which was unreliable
+# at the time we integrated this). candle-transformers ships a
+# ready-made CLIP-ViT-B/32 model that we drive with a curated
+# vocabulary — see `core/auto_tag/clip_classifier.rs`.
+# `tokenizers` loads the BPE tokenizer JSON that HuggingFace
+# distributes alongside every CLIP checkpoint.
+# `hf-hub` streams the CLIP `model.safetensors` and `tokenizer.json`
+# from `openai/clip-vit-base-patch32` on first use, with pinned SHA
+# verification and resumable downloads under
+# `<app_data_dir>/models/clip/`.
+# `reqwest` also handles model download (bytes-streamed with
+# progress events). `sha2` + `hex` verify checksums. `bytemuck`
+# casts `[f32]` slices to `[u8]` for the on-disk embedding cache.
+candle-core = { version = "0.11", default-features = false }
+candle-nn = { version = "0.11", default-features = false }
+candle-transformers = { version = "0.11", default-features = false }
+tokenizers = { version = "0.21", default-features = false, features = ["unstable_wasm"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls-native-roots", "stream", "http2"] }
+sha2 = "0.10"
+hex = "0.4"
+bytemuck = { version = "1", features = ["derive"] }
+futures-util = "0.3"
+
 # --- Windows-only: Shell IPropertyStore *read* fallback used by the
 # scanner to import tags/titles that Windows Explorer's Properties →
 # Details tab wrote to formats we can't natively parse (RAW families,

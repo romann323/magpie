@@ -1,5 +1,11 @@
 # Implementation instructions — automatic AI tagging
 
+> **Status:** Landed. Both the pipeline and the production
+> `ClipClassifier` (candle-backed CLIP-ViT-B/32) are shipping. This
+> document is kept as a design record — the "Phase 1 mock" section
+> below describes the initial slice, the "Phase 2 — real CLIP" section
+> at the end covers what actually ships today.
+
 Copy this document (or link to it) when implementing automatic AI tagging in Magpie / PicOrg.
 
 ## Project context
@@ -323,3 +329,103 @@ Read these files first, then mirror their patterns:
 - `src/features/StatusBar.tsx` — scan progress bar UI
 - `src/App.tsx` — `useMenuRouter` for Settings menu actions
 - `src-tauri/src/menu.rs` — native menu item IDs and build
+
+---
+
+## Phase 2 — real CLIP (delivered)
+
+Phase 1 shipped the mock classifier described above. Phase 2 replaced
+it with an on-device model. Two moving parts land alongside the
+existing pipeline:
+
+### Classifier — `core/auto_tag/clip_classifier.rs`
+
+- Uses [`candle`](https://github.com/huggingface/candle)'s pure-Rust
+  CLIP implementation (`candle_transformers::models::clip`). Chosen
+  over ONNX Runtime because the `ort-sys` prebuilt-binary CDN
+  (`pyke.io`) proved unreliable during integration and candle
+  removes the whole "download prebuilt native lib" failure mode.
+- Model: **OpenAI CLIP-ViT-B/32**. Runs on `Device::Cpu`; ~150-300 ms
+  per image on a modern laptop, which is fine for the folder-add
+  flow.
+- Preprocessing (`preprocess_image`) mirrors OpenAI's reference
+  pipeline: resize the shorter side to 224 px, centre-crop 224×224,
+  normalise with `CLIP_MEAN`/`CLIP_STD`, laid out as NCHW `[1, 3,
+  224, 224]`.
+- Vocabulary: `core/auto_tag/resources/photo_vocab_v1.txt` — ~1 000
+  photo words (scenes, objects, animals, activities, colours,
+  lighting) as a plain UTF-8 file, one entry per line, `#` comments
+  allowed. Bump `VOCAB_VERSION` in `model_manager.rs` when the file
+  changes; the on-disk embedding cache is keyed by
+  `SHA-256(VOCAB_TEXT)` so old caches invalidate automatically.
+- Ranking: cosine similarity (both sides L2-normalised → dot
+  product) between the 512-dim image embedding and every row of the
+  cached text-embedding matrix. Keep top-`MAX_TAGS_PER_IMAGE=6`
+  above `MIN_COSINE=0.20`.
+- Text embeddings for the vocab are computed once via
+  `compute_text_embeddings` (tokenise `"a photo of a <tag>"` with
+  the CLIP BPE tokenizer, pad to 77, run `get_text_features`,
+  L2-normalise) and cached under
+  `<app_data_dir>/models/clip/photo_vocab_v1.embeddings.f32` as
+  packed `f32` (via `bytemuck::cast_slice`).
+
+### Model files — `core/auto_tag/model_manager.rs`
+
+- Two files are downloaded lazily on first use from HuggingFace and
+  cached under `<app_data_dir>/models/clip/`:
+  - `model.safetensors` (~605 MB, pinned SHA-256).
+  - `tokenizer.json` (~2 MB, trusted).
+- Downloads stream chunk-by-chunk via `reqwest` + `futures-util`,
+  written to a `.part` file, SHA-verified, then atomically renamed.
+- **TLS uses the Windows trust store** (`reqwest`'s
+  `rustls-tls-native-roots` feature → `rustls-native-certs` →
+  SChannel). Bundled Mozilla roots weren't enough on corporate
+  networks that MITM outbound HTTPS.
+- **Resumable and retried.** Each file is attempted up to 4 times
+  with 2/4/8 s exponential backoff. Retries send
+  `Range: bytes=N-` from the current `.part` size so a mid-stream
+  drop costs one round-trip, not a full re-download. The final
+  SHA-256 covers whatever bytes were already on disk plus every
+  new chunk.
+- **Full error chains.** `chain(&err)` walks `Error::source()`
+  recursively so the dialog shows the actual cause (TLS handshake,
+  DNS lookup, mid-stream read timeout, …) instead of the top-level
+  "error sending request" reqwest wraps everything in.
+- Progress events fire on `app://ai-model-download` throttled to
+  200 ms. `AppServices.auto_tag_gate` (also used by `tag_folder`)
+  serialises downloads against any concurrent AI pass.
+- `check_status(app_data_dir)` is a cheap `stat`-only probe and
+  never blocks the UI thread.
+
+### Commands and UI
+
+- New commands `check_ai_model_status`, `download_ai_model`,
+  `clear_ai_model` — see
+  [`commands.md → AI-model management commands`](./commands.md#ai-model-management-commands).
+- Menu entry became **Settings → Auto-tag photos...** — a plain
+  item that opens `AiAutoTagDialog` in `src/features/SettingsDialogs.tsx`.
+  The dialog owns the enable/disable checkbox (kept disabled until
+  the model is `ready`) and the download / remove buttons.
+- The status bar surfaces a small warning if a scan finishes but
+  the auto-tag pass couldn't start because the model isn't on disk.
+
+### Vocabulary and tuning knobs
+
+Everything user-facing lives in `photo_vocab_v1.txt`. To retune:
+
+1. Edit the vocab. Keep entries short common nouns; the prompt
+   template `"a photo of a "` is prepended so multi-word entries
+   like `"black and white photo"` work but should stay natural
+   English.
+2. Bump `VOCAB_VERSION` in `model_manager.rs`.
+3. `MIN_COSINE` and `MAX_TAGS_PER_IMAGE` in `clip_classifier.rs`
+   are the two other knobs. Lower `MIN_COSINE` produces noisier
+   tags; raise it for higher-precision but sparser results.
+
+### Testing
+
+Integration tests in `src-tauri/tests/auto_tag.rs` still use the
+`MockClassifier`, injected through `tag_folder_with`. The
+`ClipClassifier` isn't exercised in CI because the ~600 MB model
+weights aren't downloaded there — the manual test procedure lives
+in [`testing.md`](./testing.md#testing-the-auto-tag-pipeline-end-to-end).

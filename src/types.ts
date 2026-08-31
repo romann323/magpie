@@ -133,6 +133,43 @@ export type AutoTagProgress = {
   /** Number of images this run skipped because they were already tagged and unchanged. */
   skipped: number
   finished: boolean
+  /**
+   * Populated only on the terminal event (finished=true) when the run
+   * short-circuited without processing anything — typically because
+   * the AI model files aren't downloaded yet. Surfaced as a warning
+   * strip in the status bar.
+   */
+  error?: string | null
+}
+
+/**
+ * Snapshot of the on-disk CLIP model cache, returned by
+ * `checkAiModelStatus()`. `ready` is the single boolean the UI
+ * should key off — every other field is diagnostic.
+ */
+export type AiModelStatus = {
+  ready: boolean
+  /** True once `model.safetensors` is on disk and passes the pinned checksum. */
+  modelPresent: boolean
+  tokenizerPresent: boolean
+  embeddingsPresent: boolean
+  totalBytes: number
+  bytesOnDisk: number
+}
+
+/**
+ * Payload of `app://ai-model-download`, emitted every ~200 ms while
+ * a `downloadAiModel()` call is in flight. `finished=true` marks the
+ * terminal event; `error` is populated only on failure.
+ */
+export type AiModelDownloadProgress = {
+  currentFile: string
+  currentBytes: number
+  currentTotal: number
+  totalBytes: number
+  totalExpected: number
+  finished: boolean
+  error?: string | null
 }
 
 export type SmartCollection = {

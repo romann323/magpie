@@ -32,11 +32,12 @@ pub const ID_SETTINGS_THEME: &str = "set_theme";
 pub const ID_SETTINGS_FONT_SIZE: &str = "set_font_size";
 pub const ID_SETTINGS_AI_AUTO_TAG: &str = "set_ai_auto_tag";
 
-/// Base label for the AI auto-tag toggle. The frontend appends a
-/// checkmark by calling [`set_menu_item_label`] once it knows the
-/// current setting value.
-pub const AI_AUTO_TAG_LABEL_OFF: &str = "&Auto-tag photos";
-pub const AI_AUTO_TAG_LABEL_ON: &str = "&Auto-tag photos  ✓";
+/// Static label for the AI auto-tag menu item. Clicking it opens the
+/// Auto-tag dialog (`AiAutoTagDialog` in `src/features/SettingsDialogs.tsx`)
+/// which manages both the enable/disable toggle and the model-file
+/// download. The dialog itself is where the "on/off" state is shown,
+/// so this label is intentionally static.
+pub const AI_AUTO_TAG_LABEL: &str = "&Auto-tag photos...";
 
 pub fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     let project = SubmenuBuilder::new(app, "&Project")
@@ -101,7 +102,7 @@ pub fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         .item(&MenuItemBuilder::with_id(ID_SETTINGS_FONT_SIZE, "&Font size...").build(app)?)
         .separator()
         .item(
-            &MenuItemBuilder::with_id(ID_SETTINGS_AI_AUTO_TAG, AI_AUTO_TAG_LABEL_OFF)
+            &MenuItemBuilder::with_id(ID_SETTINGS_AI_AUTO_TAG, AI_AUTO_TAG_LABEL)
                 .build(app)?,
         )
         .build()?;

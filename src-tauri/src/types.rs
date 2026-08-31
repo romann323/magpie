@@ -233,6 +233,12 @@ pub struct AutoTagProgress {
     /// still matched the previous AI-tag pass.
     pub skipped: i64,
     pub finished: bool,
+    /// Populated only when `finished` is true and something went
+    /// wrong — usually "AI model files not downloaded". The status
+    /// bar surfaces this as a small warning so the user knows the
+    /// scan itself succeeded but AI tagging didn't run.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
 }
 
 /// Summary returned when [`crate::core::auto_tag::tag_folder`] finishes.
@@ -253,6 +259,43 @@ pub struct AutoTagResult {
 pub struct TagSuggestion {
     pub name: String,
     pub confidence: f32,
+}
+
+/// Snapshot of the local CLIP model cache — used by the Settings UI
+/// to decide whether to show "Download AI model" or "Model ready".
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiModelStatus {
+    /// True once every required file is on disk *and* the vocab
+    /// text-embedding cache has been built.
+    pub ready: bool,
+    /// True when the CLIP model weights (`model.safetensors`) are
+    /// on disk and pass the pinned checksum.
+    pub model_present: bool,
+    /// True when the CLIP tokenizer JSON is present.
+    pub tokenizer_present: bool,
+    /// True when the pre-computed vocab text-embedding blob is
+    /// present and matches the current bundled vocab version.
+    pub embeddings_present: bool,
+    /// Combined size of all required downloads.
+    pub total_bytes: u64,
+    /// Combined size of the required files already downloaded.
+    pub bytes_on_disk: u64,
+}
+
+/// Progress event payload sent on `app://ai-model-download` while a
+/// model download is in flight.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiModelDownloadProgress {
+    pub current_file: String,
+    pub current_bytes: u64,
+    pub current_total: u64,
+    pub total_bytes: u64,
+    pub total_expected: u64,
+    pub finished: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

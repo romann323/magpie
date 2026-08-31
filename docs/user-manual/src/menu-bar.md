@@ -45,6 +45,6 @@ project or quit the app.
 | **Language…**         | Currently English-only. (Additional languages are on the roadmap.)    |
 | **Theme…**            | Choose Dark, Light, or Follow-system. Your choice is remembered.       |
 | **Font size…**        | Small, Medium (default), or Large — scales the whole UI.               |
-| **Auto-tag photos**   | Toggle Magpie's built-in tagger. A trailing **✓** means it's on. See [Settings → Auto-tag photos](./settings.md#auto-tag-photos). |
+| **Auto-tag photos…**  | Opens the auto-tagging dialog where you download the on-device AI model and turn tagging on or off. See [Settings → Auto-tag photos](./settings.md#auto-tag-photos). |
 
 All settings apply immediately and are saved in `%APPDATA%\com.magpie.app\app-settings.json`.
